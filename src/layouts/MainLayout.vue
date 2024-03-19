@@ -31,13 +31,13 @@
         <div class="q-pa-md  ">
           <q-btn-group class="absolute-center">
 
-            <q-btn push glossy label="prev" icon="skip_previous" />
-            <q-btn push glossy label="before" icon="navigate_before" />
+            <q-btn push glossy label="prev" icon="skip_previous" @click="prev" />
+            <q-btn push glossy label="before" icon="navigate_before" @click="beforeSentence" />
 
             <q-btn push glossy label="paly/pause" icon="play_circle" @click="togglePlay" />
-            <q-btn push glossy label="next" icon="navigate_next" />
+            <q-btn push glossy label="next" icon="navigate_next" @click="nextSentence" />
 
-            <q-btn push glossy label="next" icon="skip_next" />
+            <q-btn push glossy label="next" icon="skip_next" @click="next" />
 
           </q-btn-group>
 
@@ -84,10 +84,12 @@ function togglePlay() {
   }
 }
 
+const currentLesson = ref(null)
+
+
 async function openFile(lesson) {
-  console.log(lesson)
+  currentLesson.value = lesson;
   const content = await window.myAPI.readFile(lesson.lyrics.path + '/' + lesson.lyrics.name)
-  console.log(content.split("\n"))
   // const content = await readFileAsTextWithDetectedEncoding(file)
   parsedSentences.value = parseLRC(content)
   const audioFilePath = lesson.audio.path + '/' + lesson.audio.name
@@ -158,14 +160,9 @@ function isElementInViewport(el) {
   );
 }
 
-
-async function readFileAsTextWithDetectedEncoding(file) {
-  // read file to text
-  const buffer = await file.read()
-  console.log(buffer)
+const currentPause = ref(null);
 
 
-}
 
 function parseLRC(lrcContent) {
   const lines = lrcContent.split("\n");
@@ -196,14 +193,57 @@ function getAudioDuration(filePath) {
 import { Howl, Howler } from 'howler';
 
 function clickSentence(sentence) {
+  if (sound.value.playing()) {
+    sound.value.pause();
+  }
   currentSentence.value = sentence;
   sound.value.seek(sentence.start)
   sound.value.play();
 
   const duration = (sentence.end - sentence.start) * 1000;
-  setTimeout(() => {
+  currentPause.value = setTimeout(() => {
     sound.value.pause();
   }, duration);
+}
+
+function beforeSentence() {
+  // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) - 1];
+  if (parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) - 1]) {
+    clearTimeout(currentPause.value);
+    clickSentence(parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) - 1])
+  }
+}
+
+function nextSentence() {
+  // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) + 1];
+  if (parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) + 1]) {
+    clearTimeout(currentPause.value);
+    clickSentence(parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) + 1])
+  }
+}
+
+function prev() {
+  if (sound.value.playing()) {
+    sound.value.pause();
+  }
+
+  if (lessons.value.indexOf(currentLesson.value) > 0) {
+    openFile(lessons.value[lessons.value.indexOf(currentLesson.value) - 1])
+  } else {
+    openFile(lessons.value[lessons.value.length - 1])
+  }
+}
+
+function next() {
+  if (sound.value.playing()) {
+    sound.value.pause();
+  }
+
+  if (lessons.value.indexOf(currentLesson.value) < lessons.value.length - 1) {
+    openFile(lessons.value[lessons.value.indexOf(currentLesson.value) + 1])
+  } else {
+    openFile(lessons.value[0])
+  }
 }
 
 </script>

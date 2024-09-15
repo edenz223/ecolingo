@@ -27,9 +27,14 @@
       </q-list>
     </q-drawer>
     <q-footer elevated class="bg-grey-8 text-white">
-      <q-toolbar>
-        <div class="q-pa-md  ">
-          <q-btn-group class="absolute-center">
+      <div class="q-pa-md ">
+
+        <div class="row">
+
+          <q-btn flat class="col" @click="repeatOne = !repeatOne" dense
+            :icon="repeatOne === true ? 'repeat_one_on' : 'repeat_one'" />
+
+          <q-toolbar class="col-8">
 
             <q-btn push glossy label="prev" icon="skip_previous" @click="prev" />
             <q-btn push glossy label="before" icon="navigate_before" @click="beforeSentence" />
@@ -39,12 +44,14 @@
 
             <q-btn push glossy label="next" icon="skip_next" @click="next" />
 
-          </q-btn-group>
+          </q-toolbar>
 
-          <q-btn flat class="absolute-right" @click="toggleRightDrawer" dense icon="reorder" />
+          <q-btn flat class="col" @click="toggleRightDrawer" dense icon="reorder" />
         </div>
 
-      </q-toolbar>
+
+      </div>
+
     </q-footer>
   </q-layout>
 </template>
@@ -54,7 +61,7 @@ const rightDrawerOpen = ref(true)
 const toggleRightDrawer = () => {
   rightDrawerOpen.value = !rightDrawerOpen.value
 }
-const folderPaths = ref([])
+const repeatOne = ref(false)
 const lessons = ref([])
 const currentSentence = ref(null)
 const parsedSentences = ref([])
@@ -102,6 +109,7 @@ async function openFile(lesson) {
     },
     onplay: function () {
       requestAnimationFrame(step);
+      console.log("play")
     }
   });
 
@@ -118,7 +126,6 @@ function step() {
     let sentence = parsedSentences.value[i]
     if (currentTime >= sentence.start && currentTime < sentence.end) { // Check if the current time has passed the timecode
       currentSentence.value = sentence;
-      console.log(currentSentence.value)
       var element = document.getElementById(currentSentence.value.start);
       if (element) {
         if (!isElementInViewport(element)) {
@@ -192,18 +199,30 @@ function getAudioDuration(filePath) {
 }
 import { Howl, Howler } from 'howler';
 
-function clickSentence(sentence) {
+async function clickSentence(sentence) {
   if (sound.value.playing()) {
     sound.value.pause();
   }
   currentSentence.value = sentence;
   sound.value.seek(sentence.start)
   sound.value.play();
-
   const duration = (sentence.end - sentence.start) * 1000;
+
+  await sleep(duration)
+
+  while (repeatOne.value) {
+    console.log(sentence)
+    sound.value.seek(sentence.start)
+    sound.value.play();
+    await sleep(duration)
+
+  }
   currentPause.value = setTimeout(() => {
     sound.value.pause();
   }, duration);
+}
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function beforeSentence() {

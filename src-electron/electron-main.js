@@ -2,66 +2,86 @@ import { app, BrowserWindow, ipcMain, dialog, Menu } from "electron";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { Player } from "./player";
 
-/**
- * Asynchronously handles opening a folder dialog, retrieving files within selected folders, and returning a sorted array of file paths.
- *
- * @return {Array} Array of sorted file objects: [{ path: string, name: string }]
- */
 async function handleFolderOpen() {
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    properties: ["openDirectory"],
-  });
-  if (!canceled && filePaths.length) {
-    const files = (
-      await Promise.all(
-        filePaths.map(async (dir) => {
-          const filesInDir = await fs.promises.readdir(dir, {
-            withFileTypes: true,
-          });
-          const filesWithPath = filesInDir.filter((file) => file.isFile());
-          return filesWithPath;
-        })
-      )
-    )
-      .flat()
-      .sort((a, b) => a.name.localeCompare(b.name));
+  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+  if (result.canceled) {
+    return [];
+  }
+  const folderPath = result.filePaths[0];
+  const files = fs.readdirSync(folderPath, { withFileTypes: true });
+  console.log("Files in the selected folder:", files);
+  files
+    .filter((file) => file.isFile())
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-    // [
-    //   {
-    //     name: 'xxx',
-    //     audio: xxx,
-    //     lyrics: xxx
-    //   }
-    // ]
-    let lessons = [];
-    let names = [];
-    for (const file of files) {
-      let fileName = path.parse(file.name).name;
-      if (names.indexOf(fileName) === -1) {
-        let lesson = {
-          name: fileName,
-        };
-        if (isAudioFile(file)) {
-          lesson.audio = file;
-        }
-        if (isLyricsFile(file)) {
-          lesson.lyrics = file;
-        }
-        names.push(fileName);
-        lessons.push(lesson);
-      } else {
-        if (isAudioFile(file)) {
-          lessons.filter((lesson) => lesson.name === fileName)[0].audio = file;
-        }
-        if (isLyricsFile(file)) {
-          lessons.filter((lesson) => lesson.name === fileName)[0].lyrics = file;
-        }
-      }
+  // async method
+  // const { canceled, filePaths } = await dialog.showOpenDialog({
+  //   properties: ["openDirectory"],
+  // });
+  // if (!canceled && filePaths.length) {
+  //   const files = (
+  //     await Promise.all(
+  //       filePaths.map(async (dir) => {
+  //         const filesInDir = await fs.promises.readdir(dir, {
+  //           withFileTypes: true,
+  //         });
+  //         const filesWithPath = filesInDir.filter((file) => file.isFile());
+  //         return filesWithPath;
+  //       })
+  //     )
+  //   )
+
+  // [
+  //   {
+  //     title: 'xxx',
+  //     audio: xxx,
+  //     lyrics: xxx
+  //   }
+  // ]
+  const lessonMap = new Map();
+
+  for (const file of files) {
+    const fileName = path.parse(file.name).name;
+    let lesson = lessonMap.get(fileName);
+
+    if (!lesson) {
+      lesson = { name: fileName };
+      lessonMap.set(fileName, lesson);
     }
 
-    mainWindow.webContents.send("open-folder", lessons);
+    if (isAudioFile(file)) {
+      lesson.audio = file;
+    } else if (isLyricsFile(file)) {
+      lesson.lyrics = file;
+    }
   }
+
+  // Check if all lessons have both audio and lyrics
+  const incompleteLessons = [];
+  const completeLessons = [];
+  for (const [name, lesson] of lessonMap) {
+    if (!lesson.audio || !lesson.lyrics) {
+      incompleteLessons.push(name);
+    } else {
+      completeLessons.push(lesson);
+    }
+  }
+
+  if (incompleteLessons.length > 0) {
+    const message = `The following lessons are missing audio or lyrics files and will be skipped: ${incompleteLessons.join(
+      ", "
+    )}`;
+    dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: "Incomplete Lessons",
+      message: message,
+      buttons: ["OK"],
+    });
+  }
+
+  mainWindow.webContents.send("open-folder", completeLessons);
 }
 
 const isAudioFile = (file) => {
@@ -74,9 +94,9 @@ const isLyricsFile = (file) => {
 
 const jschardet = require("jschardet");
 
-async function readFile(event, filePath) {
+function readFile(event, filePath) {
   const content = fs.readFileSync(filePath);
-  const encoding = await jschardet.detect(content, {
+  const encoding = jschardet.detect(content, {
     detectEncodings: ["UTF-8", "Big5"],
   });
   return new TextDecoder(encoding.encoding).decode(content);
@@ -168,7 +188,7 @@ const template = [
       isMac ? { role: "close" } : { role: "quit" },
       {
         label: "Open Folder",
-        click: async () => {
+        click: () => {
           handleFolderOpen();
         },
       },

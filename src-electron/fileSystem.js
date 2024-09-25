@@ -14,7 +14,8 @@ class FileStrategy {
 
 class AudioFileStrategy extends FileStrategy {
   isMatch(file) {
-    return file.name.endsWith(".mp3");
+    const audioExtensions = [".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a"];
+    return audioExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
   }
 
   process(lesson, file) {

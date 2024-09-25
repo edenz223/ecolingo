@@ -1,61 +1,74 @@
 <template>
-  <q-layout view="hHh lpR fFr" class="electron">
-    <q-page-container>
-      <audio id="player">Player</audio>
-      <div id="sentences">
-        <q-list class="sentence" v-for="s in player.parsedSentences.value" :key="s" @click="player.clickSentence(s)">
-          <q-item clickable v-ripple>
-            <q-item-section :id="s.start.toString()" v-if="player.currentSentence.value === s" class="text-primary">
-              {{ s.text }}
-            </q-item-section>
-            <q-item-section :id="s.start.toString()" v-else>
-              {{ s.text }}
+  <q-layout view="hHh lpR fFf" class="bg-grey-1">
+    <q-header elevated class="bg-primary text-white">
+      <q-toolbar>
+        <q-toolbar-title>
+          Ecolingo
+        </q-toolbar-title>
+        <q-btn flat @click="openFolder" icon="folder_open">
+          <q-tooltip>Open Folder</q-tooltip>
+        </q-btn>
+      </q-toolbar>
+    </q-header>
+
+    <q-drawer v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
+      <q-scroll-area class="fit">
+        <q-list>
+          <q-item-label header>Lessons</q-item-label>
+          <q-item v-for="(lesson, index) in lessons" :key="lesson.name" clickable v-ripple @click="playLesson(index)"
+            :class="{ 'lesson-item': true, 'lesson-item--active': currentLessonIndex === index }">
+            <q-item-section>
+              <q-item-label>{{ lesson.name }}</q-item-label>
             </q-item-section>
           </q-item>
         </q-list>
-      </div>
-    </q-page-container>
-    <q-drawer show-if-above v-model="rightDrawerOpen" side="right" behavior="desktop" bordered>
-      <q-list dense bordered>
-        <q-item clickable v-ripple v-for="lesson in lessons" :key="lesson.name" @click="playLesson(lesson)">
-          <q-item-section>
-            <q-item-label>{{ lesson.name }}</q-item-label>
-          </q-item-section>
-        </q-item>
-      </q-list>
+      </q-scroll-area>
     </q-drawer>
-    <q-footer class="bg-grey-8 text-white">
-      <div class="row">
-        <q-btn flat class="col-2" @click="player.repeatOne.value = !player.repeatOne.value" dense :icon="player.repeatOne.value === true ? 'repeat_one_on' : 'repeat_one'
-          " />
 
-        <q-toolbar class="col-8">
-          <div class="fit row wrap justify-center ">
-            <q-btn flat icon="skip_previous" @click="prev">
-              <q-tooltip>Previous lesson</q-tooltip>
-            </q-btn>
-            <q-btn flat icon="navigate_before" @click="beforeSentence">
-              <q-tooltip>Previous sentence</q-tooltip>
-            </q-btn>
-            <q-btn v-if="player.sound.value && player.sound.value.playing()" flat icon="pause_circle"
-              @click="togglePlay">
-              <q-tooltip>Pause</q-tooltip>
-            </q-btn>
-            <q-btn v-else flat icon="play_circle" @click="togglePlay">
-              <q-tooltip>Play</q-tooltip>
-            </q-btn>
+    <q-page-container>
+      <q-page padding>
+        <div id="sentences" class="q-pa-md">
+          <q-list separator>
+            <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
+              @click="player.clickSentence(s)" :active="player.currentSentence.value === s">
+              <q-item-section>
+                <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </div>
+      </q-page>
+    </q-page-container>
 
-            <q-btn flat icon="navigate_next" @click="nextSentence">
-              <q-tooltip>Next sentence</q-tooltip>
-            </q-btn>
-            <q-btn flat icon="skip_next" @click="next">
-              <q-tooltip>Next lesson</q-tooltip>
-            </q-btn>
-          </div>
-        </q-toolbar>
+    <q-footer elevated class="bg-grey-8 text-white">
+      <q-toolbar>
+        <q-btn flat dense icon="skip_previous" @click="prev">
+          <q-tooltip>Previous lesson</q-tooltip>
+        </q-btn>
+        <q-btn flat dense icon="fast_rewind" @click="beforeSentence">
+          <q-tooltip>Previous sentence</q-tooltip>
+        </q-btn>
+        <q-btn flat dense :icon="player.sound.value && player.sound.value.playing() ? 'pause' : 'play_arrow'"
+          @click="togglePlay">
+          <q-tooltip>{{ player.sound.value && player.sound.value.playing() ? 'Pause' : 'Play' }}</q-tooltip>
+        </q-btn>
+        <q-btn flat dense icon="fast_forward" @click="nextSentence">
+          <q-tooltip>Next sentence</q-tooltip>
+        </q-btn>
+        <q-btn flat dense icon="skip_next" @click="next">
+          <q-tooltip>Next lesson</q-tooltip>
+        </q-btn>
 
-        <q-btn flat class="col-2" @click="toggleRightDrawer" dense icon="reorder" />
-      </div>
+        <q-space />
+
+        <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
+          @click="player.repeatOne.value = !player.repeatOne.value">
+          <q-tooltip>{{ player.repeatOne.value ? 'Repeat one off' : 'Repeat one on' }}</q-tooltip>
+        </q-btn>
+        <q-btn flat dense icon="menu" @click="rightDrawerOpen = !rightDrawerOpen">
+          <q-tooltip>Toggle lesson list</q-tooltip>
+        </q-btn>
+      </q-toolbar>
     </q-footer>
   </q-layout>
 </template>
@@ -63,18 +76,17 @@
 import { onMounted, ref } from "vue";
 import { parseLRC } from "../utils/lyrics-util";
 import { Howl } from "howler";
+import { useQuasar } from 'quasar'
 
-const rightDrawerOpen = ref(true);
-const toggleRightDrawer = () => {
-  rightDrawerOpen.value = !rightDrawerOpen.value;
-};
+const $q = useQuasar()
 
+const rightDrawerOpen = ref(true); // 将初始值设置为 true，使侧栏默认打开
 const lessons = ref([]);
+const currentLessonIndex = ref(-1); // Add this line to track the current lesson index
 
 onMounted(() => {
   loadLocalLessons();
 
-  // 监听文件夹选择事件
   window.fileAPI.onFolderSelected((event, values) => {
     handleOpenFolderResult(values);
   });
@@ -124,6 +136,7 @@ class Player {
       this.sound.value = new Howl({
         src: [audioFilePath],
         html5: true,
+        format: ['mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a'],
         onload: () => {
           this.parsedSentences.value[
             this.parsedSentences.value.length - 1
@@ -242,8 +255,11 @@ class Player {
 const player = new Player();
 
 // 将原来的方法替换为 player 的方法
-function playLesson(lesson) {
-  player.playLesson(lesson);
+function playLesson(index) {
+  if (index >= 0 && index < lessons.value.length) {
+    currentLessonIndex.value = index;
+    player.playLesson(lessons.value[index]);
+  }
 }
 
 function togglePlay() {
@@ -268,13 +284,13 @@ function beforeSentence() {
   // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) - 1];
   if (
     player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+    player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-        player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
       ]
     );
   }
@@ -284,13 +300,13 @@ function nextSentence() {
   // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) + 1];
   if (
     player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+    player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-        player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
       ]
     );
   }
@@ -301,11 +317,12 @@ function prev() {
     player.sound.value.pause();
   }
 
-  if (lessons.value.indexOf(player.currentLesson) > 0) {
-    playLesson(lessons.value[lessons.value.indexOf(player.currentLesson) - 1]);
+  if (currentLessonIndex.value > 0) {
+    currentLessonIndex.value--;
   } else {
-    playLesson(lessons.value[lessons.value.length - 1]);
+    currentLessonIndex.value = lessons.value.length - 1;
   }
+  playLesson(currentLessonIndex.value);
 }
 
 function next() {
@@ -313,11 +330,12 @@ function next() {
     player.sound.value.pause();
   }
 
-  if (lessons.value.indexOf(player.currentLesson) < lessons.value.length - 1) {
-    playLesson(lessons.value[lessons.value.indexOf(player.currentLesson) + 1]);
+  if (currentLessonIndex.value < lessons.value.length - 1) {
+    currentLessonIndex.value++;
   } else {
-    playLesson(lessons.value[0]);
+    currentLessonIndex.value = 0;
   }
+  playLesson(currentLessonIndex.value);
 }
 
 // 在 import 语句下面添加这个新函数
@@ -338,21 +356,30 @@ function timeToSeconds(timeString) {
   const [hours, minutes, seconds] = timeString.split(':');
   return parseFloat(hours) * 3600 + parseFloat(minutes) * 60 + parseFloat(seconds.replace(',', '.'));
 }
+
+function openFolder() {
+  window.fileAPI.openFolder();
+}
 </script>
 <style>
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  font-size: medium;
+.q-item.q-item--active {
+  background-color: #e0e0e0;
 }
 
-#sentences {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.q-drawer {
+  transition: box-shadow 0.2s;
 }
 
-.sentence {
-  cursor: pointer;
+.q-drawer--fixed {
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+.lesson-item {
+  transition: background-color 0.3s;
+}
+
+.lesson-item--active {
+  background-color: #e0e0e0 !important;
+  font-weight: bold;
 }
 </style>

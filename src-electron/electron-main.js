@@ -7,7 +7,15 @@ const fileProcessor = new FileProcessor();
 
 // 修改 handleFolderOpen 函数
 async function handleFolderOpen() {
-  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"],
+    filters: [
+      {
+        name: "Audio Files",
+        extensions: ["mp3", "wav", "ogg", "aac", "flac", "m4a"],
+      },
+    ],
+  });
   if (result.canceled) {
     return;
   }

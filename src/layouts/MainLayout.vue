@@ -60,9 +60,9 @@
   </q-layout>
 </template>
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { parseLRC } from "../utils/lyrics-util";
-import { Howl, Howler } from "howler";
+import { Howl } from "howler";
 
 const rightDrawerOpen = ref(true);
 const toggleRightDrawer = () => {
@@ -72,11 +72,12 @@ const toggleRightDrawer = () => {
 const lessons = ref([]);
 
 onMounted(() => {
-  window.fileAPI.onOpenFolder((values) => {
-    lessons.value = values;
-    localStorage.setItem("lessons", JSON.stringify(values));
-  });
   loadLocalLessons();
+
+  // 监听文件夹选择事件
+  window.fileAPI.onFolderSelected((event, values) => {
+    handleOpenFolderResult(values);
+  });
 });
 
 class Player {
@@ -249,6 +250,13 @@ function loadLocalLessons() {
   const localLessons = localStorage.getItem("lessons");
   if (localLessons) {
     lessons.value = JSON.parse(localLessons);
+  }
+}
+
+function handleOpenFolderResult(values) {
+  if (values && values.length > 0) {
+    lessons.value = values;
+    localStorage.setItem("lessons", JSON.stringify(values));
   }
 }
 

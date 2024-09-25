@@ -3,10 +3,11 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
+// 修改 handleFolderOpen 函数
 async function handleFolderOpen() {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
   if (result.canceled) {
-    return [];
+    return;
   }
   const folderPath = result.filePaths[0];
   const files = fs.readdirSync(folderPath, { withFileTypes: true });
@@ -55,7 +56,7 @@ async function handleFolderOpen() {
     });
   }
 
-  mainWindow.webContents.send("open-folder", completeLessons);
+  mainWindow.webContents.send("folder-selected", completeLessons);
 }
 
 const isAudioFile = (file) => {
@@ -77,7 +78,8 @@ function readTextFile(event, filePath) {
 }
 
 let mainWindow;
-ipcMain.handle("dialog:openFile", handleFolderOpen);
+// 修改 ipcMain 处理程序
+ipcMain.handle("open-folder", handleFolderOpen);
 ipcMain.handle("readTextFile", readTextFile);
 
 // needed in case process is undefined under Linux

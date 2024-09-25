@@ -72,7 +72,7 @@ const toggleRightDrawer = () => {
 const lessons = ref([]);
 
 onMounted(() => {
-  window.myAPI.onOpenFodler((values) => {
+  window.fileAPI.onOpenFolder((values) => {
     lessons.value = values;
     localStorage.setItem("lessons", JSON.stringify(values));
   });
@@ -97,8 +97,8 @@ class Player {
     const lyricsPath = lesson.lyrics.path + "/" + lesson.lyrics.name;
     const audioFilePath = lesson.audio.path + "/" + lesson.audio.name;
 
-    window.myAPI
-      .readFile(lyricsPath)
+    window.fileAPI
+      .readTextFile(lyricsPath)
       .then((content) => {
         this.parsedSentences.value = parseLRC(content);
         return this.initializeSound(audioFilePath);
@@ -181,12 +181,10 @@ class Player {
   handleSentenceChange(sentence) {
     var element = document.getElementById(sentence.start.toString());
     if (element && !this.isElementInViewport(element)) {
-      console.log("scrollIntoView");
       this.isScrolling.value = true;
       element.scrollIntoView({ behavior: "smooth", block: "center" });
       setTimeout(() => {
         this.isScrolling.value = false;
-        console.log("scrollIntoView end");
       }, 300);
     }
   }

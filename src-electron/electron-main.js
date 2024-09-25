@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, dialog, Menu } from "electron";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { Player } from "./player";
 
 async function handleFolderOpen() {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
@@ -11,35 +10,10 @@ async function handleFolderOpen() {
   }
   const folderPath = result.filePaths[0];
   const files = fs.readdirSync(folderPath, { withFileTypes: true });
-  console.log("Files in the selected folder:", files);
   files
     .filter((file) => file.isFile())
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // async method
-  // const { canceled, filePaths } = await dialog.showOpenDialog({
-  //   properties: ["openDirectory"],
-  // });
-  // if (!canceled && filePaths.length) {
-  //   const files = (
-  //     await Promise.all(
-  //       filePaths.map(async (dir) => {
-  //         const filesInDir = await fs.promises.readdir(dir, {
-  //           withFileTypes: true,
-  //         });
-  //         const filesWithPath = filesInDir.filter((file) => file.isFile());
-  //         return filesWithPath;
-  //       })
-  //     )
-  //   )
-
-  // [
-  //   {
-  //     title: 'xxx',
-  //     audio: xxx,
-  //     lyrics: xxx
-  //   }
-  // ]
   const lessonMap = new Map();
 
   for (const file of files) {
@@ -94,20 +68,18 @@ const isLyricsFile = (file) => {
 
 const jschardet = require("jschardet");
 
-function readFile(event, filePath) {
+function readTextFile(event, filePath) {
   const content = fs.readFileSync(filePath);
   const encoding = jschardet.detect(content, {
-    detectEncodings: ["UTF-8", "Big5"],
+    // detectEncodings: ["UTF-8", "Big5"],
   });
   return new TextDecoder(encoding.encoding).decode(content);
 }
 
 let mainWindow;
 ipcMain.handle("dialog:openFile", handleFolderOpen);
-ipcMain.handle("dialog:readFile", readFile);
-ipcMain.handle("playMp3", (event, audioPath) => {
-  mainWindow.loadFile(audioPath);
-});
+ipcMain.handle("readTextFile", readTextFile);
+
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
 
@@ -122,7 +94,7 @@ function createWindow() {
     useContentSize: true,
     webPreferences: {
       webSecurity: false,
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       // More info: https://v2.quasar.dev/quasar-cli-vite/developing-electron-apps/electron-preload-script
       preload: path.resolve(__dirname, process.env.QUASAR_ELECTRON_PRELOAD),

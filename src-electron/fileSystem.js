@@ -24,7 +24,7 @@ class AudioFileStrategy extends FileStrategy {
 
 class LyricsFileStrategy extends FileStrategy {
   isMatch(file) {
-    return file.name.endsWith(".lrc");
+    return file.name.endsWith(".lrc") || file.name.endsWith(".srt");
   }
 
   process(lesson, file) {

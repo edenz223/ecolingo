@@ -101,7 +101,11 @@ class Player {
     window.fileAPI
       .readTextFile(lyricsPath)
       .then((content) => {
-        this.parsedSentences.value = parseLRC(content);
+        if (lyricsPath.endsWith('.srt')) {
+          this.parsedSentences.value = parseSRT(content);
+        } else {
+          this.parsedSentences.value = parseLRC(content);
+        }
         return this.initializeSound(audioFilePath);
       })
       .then(() => {
@@ -314,6 +318,25 @@ function next() {
   } else {
     playLesson(lessons.value[0]);
   }
+}
+
+// 在 import 语句下面添加这个新函数
+function parseSRT(content) {
+  const lines = content.trim().split(/\r?\n\r?\n/);
+  return lines.map(block => {
+    const [id, time, ...textLines] = block.split(/\r?\n/);
+    const [startTime, endTime] = time.split(' --> ').map(timeToSeconds);
+    return {
+      start: startTime,
+      end: endTime,
+      text: textLines.join(' ')
+    };
+  });
+}
+
+function timeToSeconds(timeString) {
+  const [hours, minutes, seconds] = timeString.split(':');
+  return parseFloat(hours) * 3600 + parseFloat(minutes) * 60 + parseFloat(seconds.replace(',', '.'));
 }
 </script>
 <style>

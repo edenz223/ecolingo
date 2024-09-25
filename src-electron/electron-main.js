@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu } from "electron";
-import fs from "fs";
 import path from "path";
 import os from "os";
+import { FileProcessor } from "./fileSystem";
+
+const fileProcessor = new FileProcessor();
 
 // 修改 handleFolderOpen 函数
 async function handleFolderOpen() {
@@ -10,39 +12,8 @@ async function handleFolderOpen() {
     return;
   }
   const folderPath = result.filePaths[0];
-  const files = fs.readdirSync(folderPath, { withFileTypes: true });
-  files
-    .filter((file) => file.isFile())
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const lessonMap = new Map();
-
-  for (const file of files) {
-    const fileName = path.parse(file.name).name;
-    let lesson = lessonMap.get(fileName);
-
-    if (!lesson) {
-      lesson = { name: fileName };
-      lessonMap.set(fileName, lesson);
-    }
-
-    if (isAudioFile(file)) {
-      lesson.audio = file;
-    } else if (isLyricsFile(file)) {
-      lesson.lyrics = file;
-    }
-  }
-
-  // Check if all lessons have both audio and lyrics
-  const incompleteLessons = [];
-  const completeLessons = [];
-  for (const [name, lesson] of lessonMap) {
-    if (!lesson.audio || !lesson.lyrics) {
-      incompleteLessons.push(name);
-    } else {
-      completeLessons.push(lesson);
-    }
-  }
+  const { completeLessons, incompleteLessons } =
+    fileProcessor.processFolder(folderPath);
 
   if (incompleteLessons.length > 0) {
     const message = `The following lessons are missing audio or lyrics files and will be skipped: ${incompleteLessons.join(
@@ -59,22 +30,8 @@ async function handleFolderOpen() {
   mainWindow.webContents.send("folder-selected", completeLessons);
 }
 
-const isAudioFile = (file) => {
-  return file.name.endsWith(".mp3");
-};
-
-const isLyricsFile = (file) => {
-  return file.name.endsWith(".lrc");
-};
-
-const jschardet = require("jschardet");
-
 function readTextFile(event, filePath) {
-  const content = fs.readFileSync(filePath);
-  const encoding = jschardet.detect(content, {
-    // detectEncodings: ["UTF-8", "Big5"],
-  });
-  return new TextDecoder(encoding.encoding).decode(content);
+  return fileProcessor.readTextFile(filePath);
 }
 
 let mainWindow;

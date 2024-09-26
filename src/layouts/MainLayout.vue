@@ -2,21 +2,35 @@
   <q-layout view="hHh lpR fFf" class="bg-grey-1">
     <q-header elevated class="bg-primary text-white">
       <q-toolbar>
-        <q-toolbar-title>
-          Ecolingo
-        </q-toolbar-title>
+        <q-toolbar-title> Ecolingo </q-toolbar-title>
         <q-btn flat @click="openFolder" icon="folder_open">
-          <q-tooltip>Open Folder</q-tooltip>
+          <q-tooltip class="small-tooltip">Open folder</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
+    <q-drawer
+      v-model="rightDrawerOpen"
+      show-if-above
+      :breakpoint="500"
+      side="right"
+      bordered
+      class="bg-white"
+    >
       <q-scroll-area class="fit">
         <q-list>
-          <q-item-label header>Lessons</q-item-label>
-          <q-item v-for="(lesson, index) in lessons" :key="lesson.name" clickable v-ripple @click="playLesson(index)"
-            :class="{ 'lesson-item': true, 'lesson-item--active': currentLessonIndex === index }">
+          <q-item-label header>Lesson List</q-item-label>
+          <q-item
+            v-for="(lesson, index) in lessons"
+            :key="lesson.name"
+            clickable
+            v-ripple
+            @click="playLesson(index)"
+            :class="{
+              'lesson-item': true,
+              'lesson-item--active': currentLessonIndex === index,
+            }"
+          >
             <q-item-section>
               <q-item-label>{{ lesson.name }}</q-item-label>
             </q-item-section>
@@ -29,10 +43,18 @@
       <q-page padding>
         <div id="sentences" class="q-pa-md">
           <q-list separator>
-            <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
-              @click="player.clickSentence(s)" :active="player.currentSentence.value === s">
+            <q-item
+              v-for="s in player.parsedSentences.value"
+              :key="s.start"
+              clickable
+              v-ripple
+              @click="player.clickSentence(s)"
+              :active="player.currentSentence.value === s"
+            >
               <q-item-section>
-                <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
+                <q-item-label :id="s.start.toString()">{{
+                  s.text
+                }}</q-item-label>
               </q-item-section>
             </q-item>
           </q-list>
@@ -43,30 +65,53 @@
     <q-footer elevated class="bg-grey-8 text-white">
       <q-toolbar>
         <q-btn flat dense icon="skip_previous" @click="prev">
-          <q-tooltip>Previous lesson</q-tooltip>
+          <q-tooltip class="small-tooltip">Previous lesson</q-tooltip>
         </q-btn>
         <q-btn flat dense icon="fast_rewind" @click="beforeSentence">
-          <q-tooltip>Previous sentence</q-tooltip>
+          <q-tooltip class="small-tooltip">Previous sentence</q-tooltip>
         </q-btn>
-        <q-btn flat dense :icon="player.sound.value && player.sound.value.playing() ? 'pause' : 'play_arrow'"
-          @click="togglePlay">
-          <q-tooltip>{{ player.sound.value && player.sound.value.playing() ? 'Pause' : 'Play' }}</q-tooltip>
+        <q-btn
+          flat
+          dense
+          :icon="
+            player.sound.value && player.sound.value.playing()
+              ? 'pause'
+              : 'play_arrow'
+          "
+          @click="togglePlay"
+        >
+          <q-tooltip class="small-tooltip">{{
+            player.sound.value && player.sound.value.playing()
+              ? "Pause"
+              : "Play"
+          }}</q-tooltip>
         </q-btn>
         <q-btn flat dense icon="fast_forward" @click="nextSentence">
-          <q-tooltip>Next sentence</q-tooltip>
+          <q-tooltip class="small-tooltip">Next sentence</q-tooltip>
         </q-btn>
         <q-btn flat dense icon="skip_next" @click="next">
-          <q-tooltip>Next lesson</q-tooltip>
+          <q-tooltip class="small-tooltip">Next lesson</q-tooltip>
         </q-btn>
 
         <q-space />
 
-        <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
-          @click="player.repeatOne.value = !player.repeatOne.value">
-          <q-tooltip>{{ player.repeatOne.value ? 'Repeat one off' : 'Repeat one on' }}</q-tooltip>
+        <q-btn
+          flat
+          dense
+          :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
+          @click="player.repeatOne.value = !player.repeatOne.value"
+        >
+          <q-tooltip class="small-tooltip">{{
+            player.repeatOne.value ? "Repeat one off" : "Repeat one on"
+          }}</q-tooltip>
         </q-btn>
-        <q-btn flat dense icon="menu" @click="rightDrawerOpen = !rightDrawerOpen">
-          <q-tooltip>Toggle lesson list</q-tooltip>
+        <q-btn
+          flat
+          dense
+          icon="menu"
+          @click="rightDrawerOpen = !rightDrawerOpen"
+        >
+          <q-tooltip class="small-tooltip">Toggle lesson list</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-footer>
@@ -76,9 +121,9 @@
 import { onMounted, ref } from "vue";
 import { parseLRC } from "../utils/lyrics-util";
 import { Howl } from "howler";
-import { useQuasar } from 'quasar'
+import { useQuasar } from "quasar";
 
-const $q = useQuasar()
+const $q = useQuasar();
 
 const rightDrawerOpen = ref(true); // 将初始值设置为 true，使侧栏默认打开
 const lessons = ref([]);
@@ -113,7 +158,7 @@ class Player {
     window.fileAPI
       .readTextFile(lyricsPath)
       .then((content) => {
-        if (lyricsPath.endsWith('.srt')) {
+        if (lyricsPath.endsWith(".srt")) {
           this.parsedSentences.value = parseSRT(content);
         } else {
           this.parsedSentences.value = parseLRC(content);
@@ -136,7 +181,7 @@ class Player {
       this.sound.value = new Howl({
         src: [audioFilePath],
         html5: true,
-        format: ['mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a'],
+        format: ["mp3", "wav", "ogg", "aac", "flac", "m4a"],
         onload: () => {
           this.parsedSentences.value[
             this.parsedSentences.value.length - 1
@@ -284,13 +329,13 @@ function beforeSentence() {
   // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) - 1];
   if (
     player.parsedSentences.value[
-    player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+        player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
       ]
     );
   }
@@ -300,13 +345,13 @@ function nextSentence() {
   // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) + 1];
   if (
     player.parsedSentences.value[
-    player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+        player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
       ]
     );
   }
@@ -341,20 +386,24 @@ function next() {
 // 在 import 语句下面添加这个新函数
 function parseSRT(content) {
   const lines = content.trim().split(/\r?\n\r?\n/);
-  return lines.map(block => {
+  return lines.map((block) => {
     const [id, time, ...textLines] = block.split(/\r?\n/);
-    const [startTime, endTime] = time.split(' --> ').map(timeToSeconds);
+    const [startTime, endTime] = time.split(" --> ").map(timeToSeconds);
     return {
       start: startTime,
       end: endTime,
-      text: textLines.join(' ')
+      text: textLines.join(" "),
     };
   });
 }
 
 function timeToSeconds(timeString) {
-  const [hours, minutes, seconds] = timeString.split(':');
-  return parseFloat(hours) * 3600 + parseFloat(minutes) * 60 + parseFloat(seconds.replace(',', '.'));
+  const [hours, minutes, seconds] = timeString.split(":");
+  return (
+    parseFloat(hours) * 3600 +
+    parseFloat(minutes) * 60 +
+    parseFloat(seconds.replace(",", "."))
+  );
 }
 
 function openFolder() {
@@ -381,5 +430,9 @@ function openFolder() {
 .lesson-item--active {
   background-color: #e0e0e0 !important;
   font-weight: bold;
+}
+
+.small-tooltip {
+  font-size: 0.8em;
 }
 </style>

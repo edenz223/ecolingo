@@ -44,7 +44,7 @@ function readTextFile(event, filePath) {
 
 let mainWindow;
 // 修改 ipcMain 处理程序
-ipcMain.handle("open-folder", handleFolderOpen);
+ipcMain.handle("openFolder", handleFolderOpen);
 ipcMain.handle("readTextFile", readTextFile);
 
 // needed in case process is undefined under Linux

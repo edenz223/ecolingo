@@ -9,15 +9,28 @@
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
+    <q-drawer
+      v-model="rightDrawerOpen"
+      show-if-above
+      :breakpoint="500"
+      side="right"
+      bordered
+      class="bg-white"
+    >
       <q-scroll-area class="fit">
         <q-list>
           <q-item-label header>Lesson List</q-item-label>
-          <q-item v-for="(lesson, index) in lessons" :key="lesson.name" clickable v-ripple @click="playLesson(index)"
+          <q-item
+            v-for="(lesson, index) in lessons"
+            :key="lesson.name"
+            clickable
+            v-ripple
+            @click="playLesson(index)"
             :class="{
               'lesson-item': true,
               'lesson-item--active': currentLessonIndex === index,
-            }">
+            }"
+          >
             <q-item-section>
               <q-item-label>{{ lesson.name }}</q-item-label>
             </q-item-section>
@@ -30,8 +43,27 @@
       <q-page padding>
         <div id="sentences" class="q-pa-md">
           <q-list separator>
-            <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
-              @click="player.clickSentence(s)" :active="player.currentSentence.value === s">
+            <q-item
+              v-for="s in player.parsedSentences.value"
+              :key="s.start"
+              clickable
+              v-ripple
+              @click="player.clickSentence(s)"
+              :active="player.currentSentence.value === s"
+              :class="{
+                'shadowing-sentence':
+                  player.isShadowing.value &&
+                  player.currentSentence.value === s,
+              }"
+            >
+              <q-item-section
+                avatar
+                v-if="
+                  player.isShadowing.value && player.currentSentence.value === s
+                "
+              >
+                <q-icon name="record_voice_over" color="blue" />
+              </q-item-section>
               <q-item-section>
                 <q-item-label :id="s.start.toString()">{{
                   s.text
@@ -51,10 +83,16 @@
         <q-btn flat dense icon="fast_rewind" @click="beforeSentence">
           <q-tooltip class="small-tooltip">Previous sentence</q-tooltip>
         </q-btn>
-        <q-btn flat dense :icon="player.sound.value && player.sound.value.playing()
-          ? 'pause'
-          : 'play_arrow'
-          " @click="togglePlay">
+        <q-btn
+          flat
+          dense
+          :icon="
+            player.sound.value && player.sound.value.playing()
+              ? 'pause'
+              : 'play_arrow'
+          "
+          @click="togglePlay"
+        >
           <q-tooltip class="small-tooltip">{{
             player.sound.value && player.sound.value.playing()
               ? "Pause"
@@ -70,22 +108,61 @@
 
         <q-space />
 
-        <div class="volume-control-container" @mouseenter="showVolumeSlider" @mouseleave="startHideTimer">
-          <q-btn flat dense icon="volume_up" class="volume-control" />
-          <q-menu v-model="volumeSliderVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
-            class="q-pa-md no-shadow transparent" @mouseenter="cancelHideTimer" @mouseleave="startHideTimer">
-            <q-slider v-model="volume" :min="0" :max="100" vertical reverse @change="updateVolume" class="no-border"
-              style="height: 80px;" />
-          </q-menu>
-        </div>
-
-        <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
-          @click="player.repeatOne.value = !player.repeatOne.value">
+        <template v-if="!shadowingMode">
+          <div
+            class="volume-control-container"
+            @mouseenter="showVolumeSlider"
+            @mouseleave="startHideTimer"
+          >
+            <q-btn flat dense icon="volume_up" class="volume-control" />
+            <q-menu
+              v-model="volumeSliderVisible"
+              anchor="top right"
+              self="bottom right"
+              :offset="[10, 0]"
+              class="q-pa-md no-shadow transparent"
+              @mouseenter="cancelHideTimer"
+              @mouseleave="startHideTimer"
+            >
+              <q-slider
+                v-model="volume"
+                :min="0"
+                :max="100"
+                vertical
+                reverse
+                @change="updateVolume"
+                class="no-border"
+                style="height: 80px"
+              />
+            </q-menu>
+          </div>
+        </template>
+        <q-btn
+          flat
+          dense
+          :icon="shadowingMode ? 'record_voice_over' : 'voice_over_off'"
+          @click="toggleShadowingMode"
+        >
+          <q-tooltip class="small-tooltip">
+            {{ shadowingMode ? "Shadowing off" : "Shadowing on" }}
+          </q-tooltip>
+        </q-btn>
+        <q-btn
+          flat
+          dense
+          :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
+          @click="player.repeatOne.value = !player.repeatOne.value"
+        >
           <q-tooltip class="small-tooltip">{{
             player.repeatOne.value ? "Repeat one off" : "Repeat one on"
-            }}</q-tooltip>
+          }}</q-tooltip>
         </q-btn>
-        <q-btn flat dense icon="menu" @click="rightDrawerOpen = !rightDrawerOpen">
+        <q-btn
+          flat
+          dense
+          icon="menu"
+          @click="rightDrawerOpen = !rightDrawerOpen"
+        >
           <q-tooltip class="small-tooltip">Toggle lesson list</q-tooltip>
         </q-btn>
       </q-toolbar>
@@ -96,16 +173,15 @@
 import { onMounted, ref } from "vue";
 import { parseLRC } from "../utils/lyrics-util";
 import { Howl } from "howler";
-import { useQuasar } from "quasar";
 
-const $q = useQuasar();
-
-const rightDrawerOpen = ref(true); // 将初始值设置为 true，使侧栏默认打开
+const rightDrawerOpen = ref(true);
 const lessons = ref([]);
-const currentLessonIndex = ref(-1); // Add this line to track the current lesson index
+const currentLessonIndex = ref(-1);
 const volume = ref(100);
 const volumeSliderVisible = ref(false);
 let hideTimerId = null;
+
+const shadowingMode = ref(false);
 
 onMounted(() => {
   loadLocalLessons();
@@ -126,6 +202,7 @@ class Player {
     this.currentPause = null;
     this.repeatOne = ref(false);
     this.volume = ref(100);
+    this.isShadowing = ref(false);
   }
 
   playLesson(lesson) {
@@ -200,12 +277,26 @@ class Player {
 
     if (
       this.currentSentence.value &&
-      currentTime >= this.currentSentence.value.end &&
-      this.repeatOne.value
+      currentTime >= this.currentSentence.value.end
     ) {
-      this.sound.value.seek(this.currentSentence.value.start);
-      requestAnimationFrame(this.step.bind(this));
-      return;
+      if (shadowingMode.value) {
+        if (!this.isShadowing.value) {
+          this.sound.value.volume(0);
+          this.isShadowing.value = true;
+          this.sound.value.seek(this.currentSentence.value.start);
+          requestAnimationFrame(this.step.bind(this));
+          return;
+        } else {
+          this.sound.value.volume(this.volume.value / 100);
+          this.isShadowing.value = false;
+        }
+      }
+
+      if (this.repeatOne.value) {
+        this.sound.value.seek(this.currentSentence.value.start);
+        requestAnimationFrame(this.step.bind(this));
+        return;
+      }
     }
     let currentSentence = this.findCurrentSentence(currentTime);
     if (currentSentence !== this.currentSentence.value) {
@@ -243,6 +334,8 @@ class Player {
     if (!this.sound.value) return;
     this.stopCurrentPlayback();
     this.currentSentence.value = sentence;
+    this.sound.value.volume(this.volume.value / 100);
+    this.isShadowing.value = false;
     this.sound.value.seek(sentence.start);
     this.sound.value.play();
   }
@@ -264,22 +357,19 @@ class Player {
     var viewportHeight =
       window.innerHeight || document.documentElement.clientHeight;
 
-    // Adjust the bottom threshold by the height of the footer
     var adjustedBottom = viewportHeight - 50;
 
     return (
       rect.top >= 0 &&
       rect.left >= 0 &&
-      rect.bottom <= adjustedBottom && // Use the adjusted bottom threshold
+      rect.bottom <= adjustedBottom &&
       rect.right <= (window.innerWidth || document.documentElement.clientWidth)
     );
   }
 }
 
-// 创建 Player 实例
 const player = new Player();
 
-// 将原来的方法替换为 player 的方法
 function playLesson(index) {
   if (index >= 0 && index < lessons.value.length) {
     currentLessonIndex.value = index;
@@ -306,32 +396,30 @@ function handleOpenFolderResult(values) {
 }
 
 function beforeSentence() {
-  // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) - 1];
   if (
     player.parsedSentences.value[
-    player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+        player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
       ]
     );
   }
 }
 
 function nextSentence() {
-  // currentSentence.value = parsedSentences.value[parsedSentences.value.indexOf(currentSentence.value) + 1];
   if (
     player.parsedSentences.value[
-    player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+        player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
       ]
     );
   }
@@ -363,7 +451,6 @@ function next() {
   playLesson(currentLessonIndex.value);
 }
 
-// 在 import 语句下面添加这个新函数
 function parseSRT(content) {
   const lines = content.trim().split(/\r?\n\r?\n/);
   return lines.map((block) => {
@@ -391,7 +478,7 @@ function openFolder() {
 }
 
 function updateVolume(value) {
-  console.log(value)
+  console.log(value);
   if (player.sound.value) {
     player.sound.value.volume(value / 100);
   }
@@ -414,6 +501,10 @@ function cancelHideTimer() {
     clearTimeout(hideTimerId);
     hideTimerId = null;
   }
+}
+
+function toggleShadowingMode() {
+  shadowingMode.value = !shadowingMode.value;
 }
 </script>
 <style>
@@ -451,5 +542,16 @@ function cancelHideTimer() {
   border-radius: 4px;
   /* padding: 18px; */
   transition: opacity 0.3s;
+}
+
+.shadowing-sentence {
+  background-color: rgba(0, 128, 255, 0.1);
+  border-left: 4px solid #0080ff;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.shadowing-sentence .q-item__label {
+  color: #0080ff;
 }
 </style>

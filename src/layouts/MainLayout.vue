@@ -264,7 +264,10 @@ class Player {
   }
 
   step() {
-    if (!this.sound.value.playing()) {
+    if (
+      !this.sound.value.playing() &&
+      this.currentSentence.value.start !== this.sound.value.seek()
+    ) {
       return;
     }
 
@@ -307,9 +310,14 @@ class Player {
   }
 
   findCurrentSentence(currentTime) {
-    return this.parsedSentences.value.find(
-      (sentence) => currentTime >= sentence.start && currentTime < sentence.end
-    );
+    const sentences = this.parsedSentences.value;
+
+    const currentSentence = sentences.find((sentence, index) => {
+      const prevEnd = index > 0 ? sentences[index - 1].end : 0;
+      return currentTime > prevEnd && currentTime <= sentence.end;
+    });
+
+    return currentSentence || sentences[0];
   }
 
   handleSentenceChange(sentence) {

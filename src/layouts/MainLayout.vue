@@ -9,28 +9,15 @@
       </q-toolbar>
     </q-header>
 
-    <q-drawer
-      v-model="rightDrawerOpen"
-      show-if-above
-      :breakpoint="500"
-      side="right"
-      bordered
-      class="bg-white"
-    >
+    <q-drawer v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
       <q-scroll-area class="fit">
         <q-list>
           <q-item-label header>Lesson List</q-item-label>
-          <q-item
-            v-for="(lesson, index) in lessons"
-            :key="lesson.name"
-            clickable
-            v-ripple
-            @click="playLesson(index)"
+          <q-item v-for="(lesson, index) in lessons" :key="lesson.name" clickable v-ripple @click="playLesson(index)"
             :class="{
               'lesson-item': true,
               'lesson-item--active': currentLessonIndex === index,
-            }"
-          >
+            }">
             <q-item-section>
               <q-item-label>{{ lesson.name }}</q-item-label>
             </q-item-section>
@@ -43,31 +30,21 @@
       <q-page padding>
         <div id="sentences" class="q-pa-md">
           <q-list separator>
-            <q-item
-              v-for="s in player.parsedSentences.value"
-              :key="s.start"
-              clickable
-              v-ripple
-              @click="player.clickSentence(s)"
-              :active="player.currentSentence.value === s"
-              :class="{
+            <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
+              @click="player.clickSentence(s)" :active="player.currentSentence.value === s" :class="{
                 'shadowing-sentence':
                   player.isShadowing.value &&
                   player.currentSentence.value === s,
-              }"
-            >
-              <q-item-section
-                avatar
-                v-if="
-                  player.isShadowing.value && player.currentSentence.value === s
-                "
-              >
+              }">
+              <q-item-section avatar v-if="
+                player.isShadowing.value && player.currentSentence.value === s
+              ">
                 <q-icon name="record_voice_over" color="blue" />
               </q-item-section>
               <q-item-section>
                 <q-item-label :id="s.start.toString()">{{
                   s.text
-                }}</q-item-label>
+                  }}</q-item-label>
               </q-item-section>
             </q-item>
           </q-list>
@@ -83,16 +60,10 @@
         <q-btn flat dense icon="fast_rewind" @click="beforeSentence">
           <q-tooltip class="small-tooltip">Previous sentence</q-tooltip>
         </q-btn>
-        <q-btn
-          flat
-          dense
-          :icon="
-            player.sound.value && player.sound.value.playing()
-              ? 'pause'
-              : 'play_arrow'
-          "
-          @click="togglePlay"
-        >
+        <q-btn flat dense :icon="player.sound.value && player.sound.value.playing()
+          ? 'pause'
+          : 'play_arrow'
+          " @click="togglePlay">
           <q-tooltip class="small-tooltip">{{
             player.sound.value && player.sound.value.playing()
               ? "Pause"
@@ -109,60 +80,40 @@
         <q-space />
 
         <template v-if="!shadowingMode">
-          <div
-            class="volume-control-container"
-            @mouseenter="showVolumeSlider"
-            @mouseleave="startHideTimer"
-          >
+          <div class="volume-control-container" @mouseenter="showVolumeSlider" @mouseleave="startHideTimer">
             <q-btn flat dense icon="volume_up" class="volume-control" />
-            <q-menu
-              v-model="volumeSliderVisible"
-              anchor="top right"
-              self="bottom right"
-              :offset="[10, 0]"
-              class="q-pa-md no-shadow transparent"
-              @mouseenter="cancelHideTimer"
-              @mouseleave="startHideTimer"
-            >
-              <q-slider
-                v-model="volume"
-                :min="0"
-                :max="100"
-                vertical
-                reverse
-                @change="updateVolume"
-                class="no-border"
-                style="height: 80px"
-              />
+            <q-menu v-model="volumeSliderVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
+              class="q-pa-md no-shadow transparent" @mouseenter="cancelHideTimer" @mouseleave="startHideTimer">
+              <q-slider v-model="volume" :min="0" :max="100" vertical reverse @change="updateVolume" class="no-border"
+                style="height: 80px" />
             </q-menu>
           </div>
         </template>
-        <q-btn
-          flat
-          dense
-          :icon="shadowingMode ? 'record_voice_over' : 'voice_over_off'"
-          @click="toggleShadowingMode"
-        >
+        <q-btn flat dense :icon="shadowingMode ? 'record_voice_over' : 'voice_over_off'" @click="toggleShadowingMode">
           <q-tooltip class="small-tooltip">
             {{ shadowingMode ? "Shadowing off" : "Shadowing on" }}
           </q-tooltip>
         </q-btn>
-        <q-btn
-          flat
-          dense
-          :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
-          @click="player.repeatOne.value = !player.repeatOne.value"
-        >
+        <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
+          @click="player.repeatOne.value = !player.repeatOne.value">
           <q-tooltip class="small-tooltip">{{
             player.repeatOne.value ? "Repeat one off" : "Repeat one on"
-          }}</q-tooltip>
+            }}</q-tooltip>
         </q-btn>
-        <q-btn
-          flat
-          dense
-          icon="menu"
-          @click="rightDrawerOpen = !rightDrawerOpen"
-        >
+
+        <!-- Add this new button for playback rate control -->
+        <div @mouseenter="showPlaybackRateMenu" @mouseleave="startHidePlaybackRateTimer">
+          <q-btn flat dense :label="currentPlaybackRate + 'x'" class="playback-rate-control" />
+          <q-menu v-model="playbackRateMenuVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
+            class="q-pa-sm" @mouseenter="cancelHidePlaybackRateTimer" @mouseleave="startHidePlaybackRateTimer">
+            <q-list dense>
+              <q-item v-for="rate in playbackRates" :key="rate" clickable v-close-popup @click="setPlaybackRate(rate)">
+                <q-item-section>{{ rate }}x</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </div>
+        <q-btn flat dense icon="menu" @click="rightDrawerOpen = !rightDrawerOpen">
           <q-tooltip class="small-tooltip">Toggle lesson list</q-tooltip>
         </q-btn>
       </q-toolbar>
@@ -182,6 +133,12 @@ const volumeSliderVisible = ref(false);
 let hideTimerId = null;
 
 const shadowingMode = ref(false);
+
+// Add these new refs and constants
+const playbackRateMenuVisible = ref(false);
+const currentPlaybackRate = ref(1);
+const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2];
+let hidePlaybackRateTimerId = null;
 
 onMounted(() => {
   loadLocalLessons();
@@ -203,6 +160,7 @@ class Player {
     this.repeatOne = ref(false);
     this.volume = ref(100);
     this.isShadowing = ref(false);
+    this.playbackRate = ref(1);
   }
 
   playLesson(lesson) {
@@ -239,6 +197,7 @@ class Player {
         html5: true,
         format: ["mp3", "wav", "ogg", "aac", "flac", "m4a"],
         volume: this.volume.value / 100,
+        rate: this.playbackRate.value,
         onload: () => {
           this.parsedSentences.value[
             this.parsedSentences.value.length - 1
@@ -374,6 +333,14 @@ class Player {
       rect.right <= (window.innerWidth || document.documentElement.clientWidth)
     );
   }
+
+  // Add this method to update playback rate
+  setPlaybackRate(rate) {
+    this.playbackRate.value = rate;
+    if (this.sound.value) {
+      this.sound.value.rate(rate);
+    }
+  }
 }
 
 const player = new Player();
@@ -406,13 +373,13 @@ function handleOpenFolderResult(values) {
 function beforeSentence() {
   if (
     player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+    player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-        player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
       ]
     );
   }
@@ -421,13 +388,13 @@ function beforeSentence() {
 function nextSentence() {
   if (
     player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+    player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
     ]
   ) {
     clearTimeout(player.currentPause);
     player.clickSentence(
       player.parsedSentences.value[
-        player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
+      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
       ]
     );
   }
@@ -514,6 +481,33 @@ function cancelHideTimer() {
 function toggleShadowingMode() {
   shadowingMode.value = !shadowingMode.value;
 }
+
+// Add these new functions
+function showPlaybackRateMenu() {
+  playbackRateMenuVisible.value = true;
+  cancelHidePlaybackRateTimer();
+}
+
+function startHidePlaybackRateTimer() {
+  cancelHidePlaybackRateTimer();
+  hidePlaybackRateTimerId = setTimeout(() => {
+    playbackRateMenuVisible.value = false;
+  }, 800);
+}
+
+function cancelHidePlaybackRateTimer() {
+  if (hidePlaybackRateTimerId !== null) {
+    clearTimeout(hidePlaybackRateTimerId);
+    hidePlaybackRateTimerId = null;
+  }
+}
+
+function setPlaybackRate(rate) {
+  currentPlaybackRate.value = rate;
+  if (player.sound.value) {
+    player.sound.value.rate(rate);
+  }
+}
 </script>
 <style>
 .q-item.q-item--active {
@@ -561,5 +555,14 @@ function toggleShadowingMode() {
 
 .shadowing-sentence .q-item__label {
   color: #0080ff;
+}
+
+.playback-rate-container {
+  position: relative;
+  display: inline-block;
+}
+
+.playback-rate-control {
+  min-width: 50px;
 }
 </style>

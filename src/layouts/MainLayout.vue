@@ -42,9 +42,7 @@
                 <q-icon name="record_voice_over" color="blue" />
               </q-item-section>
               <q-item-section>
-                <q-item-label :id="s.start.toString()">{{
-                  s.text
-                  }}</q-item-label>
+                <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
               </q-item-section>
             </q-item>
           </q-list>
@@ -121,7 +119,7 @@
   </q-layout>
 </template>
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, ref, onUnmounted } from "vue";
 import { parseLRC } from "../utils/lyrics-util";
 import { Howl } from "howler";
 
@@ -137,8 +135,52 @@ const shadowingMode = ref(false);
 // Add these new refs and constants
 const playbackRateMenuVisible = ref(false);
 const currentPlaybackRate = ref(1);
-const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 let hidePlaybackRateTimerId = null;
+
+function handleKeyDown(event) {
+  console.log(event.code);
+  event.preventDefault();
+  event.target.blur();
+  if (event.code === 'Space' && !event.target.closest('input, textarea')) {
+    togglePlay();
+  }
+  if (event.code === 'KeyS' && !event.target.closest('input, textarea')) {
+    toggleShadowingMode();
+  }
+  if (event.code === 'KeyD' && !event.target.closest('input, textarea')) {
+    nextSentence();
+  }
+  if (event.code === 'KeyA' && !event.target.closest('input, textarea')) {
+    beforeSentence();
+  }
+  if (event.code === 'KeyQ' && !event.target.closest('input, textarea')) {
+    prev();
+  }
+  if (event.code === 'KeyE' && !event.target.closest('input, textarea')) {
+    next();
+  }
+  // Key C to add 0.1 rate
+  if (event.code === 'KeyC' && !event.target.closest('input, textarea')) {
+    setPlaybackRate((parseFloat(currentPlaybackRate.value) + 0.1).toFixed(2));
+  }
+  // Key V to subtract 0.1 rate
+  if (event.code === 'KeyX' && !event.target.closest('input, textarea')) {
+    setPlaybackRate((parseFloat(currentPlaybackRate.value) - 0.1).toFixed(2));
+  }
+  // Key Z to reset playback rate to 1
+  if (event.code === 'KeyZ' && !event.target.closest('input, textarea')) {
+    setPlaybackRate(1);
+  }
+  // Key M to toggle mute
+  if (event.code === 'KeyM' && !event.target.closest('input, textarea')) {
+    player.sound.value.mute(!player.sound.value.mute());
+  }
+  // Control + KeyR to reload the page
+  if (event.code === 'KeyR' && event.ctrlKey) {
+    location.reload();
+  }
+}
 
 onMounted(() => {
   loadLocalLessons();
@@ -146,6 +188,12 @@ onMounted(() => {
   window.fileAPI.onFolderSelected((event, values) => {
     handleOpenFolderResult(values);
   });
+
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
 });
 
 class Player {
@@ -260,7 +308,6 @@ class Player {
       }
     }
     let currentSentence = this.findCurrentSentence(currentTime);
-    console.log(this.currentSentence.value);
     if (currentSentence !== this.currentSentence.value) {
       this.currentSentence.value = currentSentence;
       this.handleSentenceChange(currentSentence);
@@ -353,7 +400,9 @@ function playLesson(index) {
 }
 
 function togglePlay() {
-  player.togglePlay();
+  if (player.sound.value) {
+    player.togglePlay();
+  }
 }
 
 function loadLocalLessons() {
@@ -401,7 +450,7 @@ function nextSentence() {
 }
 
 function prev() {
-  if (player.sound.value.playing()) {
+  if (player.sound.value?.playing()) {
     player.sound.value.pause();
   }
 
@@ -414,7 +463,7 @@ function prev() {
 }
 
 function next() {
-  if (player.sound.value.playing()) {
+  if (player.sound.value?.playing()) {
     player.sound.value.pause();
   }
 
@@ -453,7 +502,6 @@ function openFolder() {
 }
 
 function updateVolume(value) {
-  console.log(value);
   if (player.sound.value) {
     player.sound.value.volume(value / 100);
   }

@@ -28,6 +28,12 @@
 
     <q-page-container>
       <q-page padding>
+        <q-banner v-if="recordingError" class="bg-red-1 text-negative q-mb-md">
+          <template #avatar>
+            <q-icon name="warning" color="negative" />
+          </template>
+          {{ recordingError }}
+        </q-banner>
         <div id="sentences" class="q-pa-md">
           <q-list separator>
             <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
@@ -35,6 +41,8 @@
                 'shadowing-sentence':
                   player.isShadowing.value &&
                   player.currentSentence.value === s,
+                'sentence-being-recorded': currentRecordingSentence === s.start,
+                'sentence-has-recording': Boolean(recordings[s.start]),
               }">
               <q-item-section avatar v-if="
                 player.isShadowing.value && player.currentSentence.value === s
@@ -43,6 +51,17 @@
               </q-item-section>
               <q-item-section>
                 <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
+              </q-item-section>
+              <q-item-section side class="sentence-actions">
+                <q-badge v-if="currentRecordingSentence === s.start" color="red-5" text-color="white"
+                  class="recording-badge">
+                  REC
+                </q-badge>
+                <q-btn v-if="recordings[s.start]" round dense flat icon="play_circle"
+                  @click.stop="playUserRecording(s.start)"
+                  :disable="isRecording && currentRecordingSentence === s.start">
+                  <q-tooltip class="small-tooltip">Play your recording</q-tooltip>
+                </q-btn>
               </q-item-section>
             </q-item>
           </q-list>
@@ -131,6 +150,18 @@ const volumeSliderVisible = ref(false);
 let hideTimerId = null;
 
 const shadowingMode = ref(false);
+const recordings = ref({});
+const isRecording = ref(false);
+const currentRecordingSentence = ref(null);
+const recordingError = ref("");
+let mediaRecorder = null;
+let mediaStream = null;
+let recordingChunks = [];
+let recordingTimeoutId = null;
+let pendingRecordingSentence = null;
+let recorderInitPromise = null;
+let discardNextRecording = false;
+let previewAudio = null;
 
 // Add these new refs and constants
 const playbackRateMenuVisible = ref(false);
@@ -194,6 +225,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  stopSentenceRecording(true);
+  releaseRecordingResources();
 });
 
 class Player {
@@ -290,12 +323,14 @@ class Player {
     ) {
       if (shadowingMode.value) {
         if (!this.isShadowing.value) {
+          startSentenceRecording(this.currentSentence.value);
           this.sound.value.volume(0);
           this.isShadowing.value = true;
           this.sound.value.seek(this.currentSentence.value.start);
           requestAnimationFrame(this.step.bind(this));
           return;
         } else {
+          stopSentenceRecording();
           this.sound.value.volume(this.volume.value / 100);
           this.isShadowing.value = false;
         }
@@ -355,11 +390,16 @@ class Player {
   }
 
   stopCurrentPlayback() {
-    if (this.sound.value.playing()) {
+    if (this.sound.value?.playing()) {
       this.sound.value.pause();
     }
     if (this.currentPause) {
       clearTimeout(this.currentPause);
+    }
+    stopSentenceRecording(true);
+    this.isShadowing.value = false;
+    if (this.sound.value) {
+      this.sound.value.volume(this.volume.value / 100);
     }
   }
 
@@ -526,8 +566,21 @@ function cancelHideTimer() {
   }
 }
 
-function toggleShadowingMode() {
-  shadowingMode.value = !shadowingMode.value;
+async function toggleShadowingMode() {
+  if (shadowingMode.value) {
+    shadowingMode.value = false;
+    stopSentenceRecording(true);
+    player.isShadowing.value = false;
+    if (player.sound.value) {
+      player.sound.value.volume(volume.value / 100);
+    }
+    return;
+  }
+
+  const ready = await ensureRecorderAccess();
+  if (ready) {
+    shadowingMode.value = true;
+  }
 }
 
 // Add these new functions
@@ -554,6 +607,216 @@ function setPlaybackRate(rate) {
   currentPlaybackRate.value = rate;
   if (player.sound.value) {
     player.sound.value.rate(rate);
+  }
+}
+
+async function ensureRecorderAccess() {
+  if (typeof window === "undefined") {
+    recordingError.value = "Recording is only available in the desktop app.";
+    return false;
+  }
+
+  if (mediaRecorder) {
+    return true;
+  }
+
+  if (recorderInitPromise) {
+    return recorderInitPromise;
+  }
+
+  const hasNavigator = typeof navigator !== "undefined";
+  if (
+    typeof window.MediaRecorder === "undefined" ||
+    !hasNavigator ||
+    !navigator.mediaDevices?.getUserMedia
+  ) {
+    recordingError.value = "Recording is not supported in this environment.";
+    return false;
+  }
+
+  recorderInitPromise = navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then((stream) => {
+      mediaStream = stream;
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.addEventListener("dataavailable", handleRecorderData);
+      mediaRecorder.addEventListener("stop", handleRecorderStop);
+      recordingError.value = "";
+      return true;
+    })
+    .catch((error) => {
+      recordingError.value =
+        error?.message || "Unable to access the microphone.";
+      return false;
+    })
+    .finally(() => {
+      recorderInitPromise = null;
+    });
+
+  return recorderInitPromise;
+}
+
+function startSentenceRecording(sentence) {
+  if (!sentence || !shadowingMode.value) {
+    return;
+  }
+
+  ensureRecorderAccess().then((ready) => {
+    if (
+      !ready ||
+      !mediaRecorder ||
+      shadowingMode.value === false ||
+      player.currentSentence.value !== sentence
+    ) {
+      return;
+    }
+
+    if (mediaRecorder.state === "recording") {
+      discardNextRecording = true;
+      mediaRecorder.stop();
+    }
+
+    const duration =
+      Math.max((sentence.end ?? sentence.start) - sentence.start, 0) || 0;
+
+    pendingRecordingSentence = {
+      start: sentence.start,
+      text: sentence.text,
+      duration,
+    };
+
+    isRecording.value = true;
+    recordingChunks = [];
+    currentRecordingSentence.value = sentence.start;
+    mediaRecorder.start();
+
+    if (recordingTimeoutId) {
+      clearTimeout(recordingTimeoutId);
+    }
+
+    const fallbackDuration = Math.max(duration * 1000, 200) + 150;
+    recordingTimeoutId = setTimeout(() => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+    }, fallbackDuration);
+  });
+}
+
+function stopSentenceRecording(discard = false) {
+  if (recordingTimeoutId) {
+    clearTimeout(recordingTimeoutId);
+    recordingTimeoutId = null;
+  }
+
+  if (discard) {
+    discardNextRecording = true;
+  }
+
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    return;
+  }
+
+  if (discard) {
+    resetRecordingState();
+    discardNextRecording = false;
+  }
+}
+
+function handleRecorderData(event) {
+  if (event.data && event.data.size > 0) {
+    recordingChunks.push(event.data);
+  }
+}
+
+function handleRecorderStop() {
+  if (recordingTimeoutId) {
+    clearTimeout(recordingTimeoutId);
+    recordingTimeoutId = null;
+  }
+
+  const shouldDiscard = discardNextRecording;
+  discardNextRecording = false;
+
+  if (
+    shouldDiscard ||
+    !pendingRecordingSentence ||
+    recordingChunks.length === 0
+  ) {
+    resetRecordingState();
+    return;
+  }
+
+  const blob = new Blob(recordingChunks, {
+    type: mediaRecorder?.mimeType || "audio/webm",
+  });
+
+  saveRecording(pendingRecordingSentence, blob);
+  resetRecordingState();
+}
+
+function saveRecording(meta, blob) {
+  const url = URL.createObjectURL(blob);
+  const existing = recordings.value[meta.start];
+  if (existing?.url) {
+    URL.revokeObjectURL(existing.url);
+  }
+
+  recordings.value = {
+    ...recordings.value,
+    [meta.start]: {
+      url,
+      text: meta.text,
+      duration: meta.duration,
+      updatedAt: Date.now(),
+    },
+  };
+}
+
+function resetRecordingState() {
+  isRecording.value = false;
+  currentRecordingSentence.value = null;
+  pendingRecordingSentence = null;
+  recordingChunks = [];
+  discardNextRecording = false;
+}
+
+function playUserRecording(sentenceStart) {
+  const recording = recordings.value[sentenceStart];
+  if (!recording) {
+    return;
+  }
+
+  if (previewAudio) {
+    previewAudio.pause();
+  }
+
+  previewAudio = new Audio(recording.url);
+  previewAudio.play();
+}
+
+function releaseRecordingResources() {
+  if (previewAudio) {
+    previewAudio.pause();
+    previewAudio = null;
+  }
+
+  Object.values(recordings.value).forEach((clip) => {
+    if (clip?.url) {
+      URL.revokeObjectURL(clip.url);
+    }
+  });
+
+  if (mediaRecorder) {
+    mediaRecorder.removeEventListener("dataavailable", handleRecorderData);
+    mediaRecorder.removeEventListener("stop", handleRecorderStop);
+    mediaRecorder = null;
+  }
+
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop());
+    mediaStream = null;
   }
 }
 </script>
@@ -612,5 +875,26 @@ function setPlaybackRate(rate) {
 
 .playback-rate-control {
   min-width: 50px;
+}
+
+.sentence-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recording-badge {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.sentence-being-recorded {
+  border-left: 4px solid #f44336;
+  background-color: rgba(244, 67, 54, 0.08);
+}
+
+.sentence-has-recording:not(.sentence-being-recorded) {
+  border-left: 4px solid #2e7d32;
+  background-color: rgba(76, 175, 80, 0.08);
 }
 </style>

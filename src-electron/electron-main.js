@@ -60,6 +60,8 @@ function createWindow() {
     height: 600,
     useContentSize: true,
     webPreferences: {
+      // Keep the audio-clock checks running while the lesson window is minimized.
+      backgroundThrottling: false,
       webSecurity: false,
       sandbox: true,
       contextIsolation: true,

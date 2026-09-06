@@ -205,7 +205,7 @@ function handleKeyDown(event) {
   }
   // Key M to toggle mute
   if (event.code === 'KeyM' && !event.target.closest('input, textarea')) {
-    player.sound.value.mute(!player.sound.value.mute());
+    player.sound.value?.mute(!player.sound.value.mute());
   }
   // Control + KeyR to reload the page
   if (event.code === 'KeyR' && event.ctrlKey) {
@@ -225,13 +225,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
-  stopSentenceRecording(true);
+  player.releaseLesson();
   releaseRecordingResources();
 });
 
 class Player {
   constructor() {
-    this.prevSound = null;
+    this.loadSessionId = 0;
+    this.pendingSound = null;
+    this.stepTimerId = null;
     this.sound = ref(null);
     this.currentLesson = null;
     this.currentSentence = ref(null);
@@ -244,90 +246,118 @@ class Player {
     this.playbackRate = ref(1);
   }
 
-  playLesson(lesson) {
-    this.prevSound = this.sound.value;
+  async playLesson(lesson) {
+    this.releaseLesson();
+    const sessionId = this.loadSessionId;
     this.currentLesson = lesson;
     const lyricsPath = lesson.lyrics.path + "/" + lesson.lyrics.name;
     const audioFilePath = lesson.audio.path + "/" + lesson.audio.name;
 
-    window.fileAPI
-      .readTextFile(lyricsPath)
-      .then((content) => {
-        if (lyricsPath.endsWith(".srt")) {
-          this.parsedSentences.value = parseSRT(content);
-        } else {
-          this.parsedSentences.value = parseLRC(content);
-        }
-        return this.initializeSound(audioFilePath);
-      })
-      .then(() => {
-        if (this.prevSound) {
-          this.prevSound.pause();
-        }
-        this.clickSentence(this.parsedSentences.value[0]);
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-      });
+    try {
+      const content = await window.fileAPI.readTextFile(lyricsPath);
+      if (sessionId !== this.loadSessionId) return;
+      const sentences = lyricsPath.endsWith('.srt')
+        ? parseSRT(content)
+        : parseLRC(content);
+      if (!sentences.length) throw new Error('No sentences found in transcript.');
+      this.initializeSound(audioFilePath, sentences, sessionId);
+    } catch (error) {
+      if (sessionId === this.loadSessionId) {
+        console.error('Error:', error);
+      }
+    }
   }
 
-  initializeSound(audioFilePath) {
-    return new Promise((resolve, reject) => {
-      this.sound.value = new Howl({
+  releaseLesson() {
+    this.loadSessionId++;
+    this.stopCurrentPlayback();
+    clearTimeout(this.stepTimerId);
+    this.stepTimerId = null;
+    this.pendingSound?.unload();
+    this.pendingSound = null;
+    this.sound.value?.unload();
+    this.sound.value = null;
+    this.currentLesson = null;
+    this.currentSentence.value = null;
+    this.parsedSentences.value = [];
+    this.isScrolling.value = false;
+    if (previewAudio) {
+      previewAudio.pause();
+      previewAudio = null;
+    }
+  }
+
+  initializeSound(audioFilePath, sentences, sessionId) {
+      const sound = new Howl({
+        preload: false,
         src: [audioFilePath],
         html5: true,
         format: ["mp3", "wav", "ogg", "aac", "flac", "m4a"],
         volume: this.volume.value / 100,
         rate: this.playbackRate.value,
         onload: () => {
-          this.parsedSentences.value[
-            this.parsedSentences.value.length - 1
-          ].end = this.sound.value.duration();
-          resolve();
+          if (sessionId !== this.loadSessionId) return;
+          sentences[sentences.length - 1].end = sound.duration();
+          this.pendingSound = null;
+          this.sound.value = sound;
+          this.parsedSentences.value = sentences;
+          this.clickSentence(sentences[0]);
         },
         onloaderror: (id, error) => {
-          reject(error);
+          if (sessionId !== this.loadSessionId) return;
+          this.pendingSound = null;
+          sound.unload();
+          console.error('Error:', error);
         },
         onplay: () => {
-          requestAnimationFrame(this.step.bind(this));
+          if (sessionId === this.loadSessionId) this.scheduleStep();
+        },
+        onend: () => {
+          if (sessionId === this.loadSessionId) this.step(true);
         },
       });
-    });
+      this.pendingSound = sound;
+      sound.load();
+  }
+
+  scheduleStep() {
+    clearTimeout(this.stepTimerId);
+    const sessionId = this.loadSessionId;
+    this.stepTimerId = setTimeout(() => {
+      if (sessionId !== this.loadSessionId) return;
+      this.stepTimerId = null;
+      this.step();
+    }, 20);
   }
 
   togglePlay() {
     if (this.sound.value.playing()) {
-      this.sound.value.pause();
+      const sentence = this.currentSentence.value;
+      const wasShadowing = this.isShadowing.value;
+      this.stopCurrentPlayback();
+      if (wasShadowing) this.sound.value.seek(sentence.start);
     } else {
       this.sound.value.play();
     }
   }
 
-  step() {
-    if (
-      !this.sound.value.playing() &&
-      this.currentSentence.value.start !== this.sound.value.seek()
-    ) {
-      return;
-    }
+  step(ended = false) {
+    if (!this.sound.value || !this.currentSentence.value) return;
+    if (!ended && !this.sound.value.playing()) return;
 
-    if (this.isScrolling.value) {
-      requestAnimationFrame(this.step.bind(this));
-      return;
-    }
-
-    var currentTime = this.sound.value.seek() || 0;
+    const currentTime = ended ? this.sound.value.duration() : this.sound.value.seek() || 0;
     if (
       this.currentSentence.value &&
       currentTime >= this.currentSentence.value.end
     ) {
       if (shadowingMode.value) {
         if (!this.isShadowing.value) {
-          startSentenceRecording(this.currentSentence.value);
           this.sound.value.volume(0);
           this.isShadowing.value = true;
+          startSentenceRecording(this.currentSentence.value);
           this.sound.value.seek(this.currentSentence.value.start);
-          requestAnimationFrame(this.step.bind(this));
+          if (!this.sound.value.playing()) this.sound.value.play();
+          this.scheduleStep();
           return;
         } else {
           stopSentenceRecording();
@@ -338,16 +368,30 @@ class Player {
 
       if (this.repeatOne.value) {
         this.sound.value.seek(this.currentSentence.value.start);
-        requestAnimationFrame(this.step.bind(this));
+        if (!this.sound.value.playing()) this.sound.value.play();
+        this.scheduleStep();
         return;
       }
+      const nextSentence = this.getNextSentence();
+      if (!nextSentence) {
+        this.sound.value.pause();
+        clearTimeout(this.stepTimerId);
+        this.stepTimerId = null;
+        return;
+      }
+      this.currentSentence.value = nextSentence;
+      this.sound.value.seek(nextSentence.start);
+      if (!this.sound.value.playing()) this.sound.value.play();
+      this.handleSentenceChange(nextSentence);
+      this.scheduleStep();
+      return;
     }
     let currentSentence = this.findCurrentSentence(currentTime);
     if (currentSentence !== this.currentSentence.value) {
       this.currentSentence.value = currentSentence;
       this.handleSentenceChange(currentSentence);
     }
-    return requestAnimationFrame(this.step.bind(this));
+    return this.scheduleStep();
   }
 
   findCurrentSentence(currentTime) {
@@ -366,7 +410,9 @@ class Player {
     if (element && !this.isElementInViewport(element)) {
       this.isScrolling.value = true;
       element.scrollIntoView({ behavior: "smooth", block: "center" });
+      const sessionId = this.loadSessionId;
       setTimeout(() => {
+        if (sessionId !== this.loadSessionId) return;
         this.isScrolling.value = false;
       }, 300);
     }
@@ -380,7 +426,7 @@ class Player {
   }
 
   async clickSentence(sentence) {
-    if (!this.sound.value) return;
+    if (!this.sound.value || !sentence) return;
     this.stopCurrentPlayback();
     this.currentSentence.value = sentence;
     this.sound.value.volume(this.volume.value / 100);
@@ -390,6 +436,8 @@ class Player {
   }
 
   stopCurrentPlayback() {
+    clearTimeout(this.stepTimerId);
+    this.stepTimerId = null;
     if (this.sound.value?.playing()) {
       this.sound.value.pause();
     }
@@ -661,11 +709,14 @@ function startSentenceRecording(sentence) {
     return;
   }
 
+  const sessionId = player.loadSessionId;
   ensureRecorderAccess().then((ready) => {
     if (
       !ready ||
       !mediaRecorder ||
       shadowingMode.value === false ||
+      !player.isShadowing.value ||
+      player.loadSessionId !== sessionId ||
       player.currentSentence.value !== sentence
     ) {
       return;
@@ -694,12 +745,7 @@ function startSentenceRecording(sentence) {
       clearTimeout(recordingTimeoutId);
     }
 
-    const fallbackDuration = Math.max(duration * 1000, 200) + 150;
-    recordingTimeoutId = setTimeout(() => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-    }, fallbackDuration);
+    // The playback clock ends recording, including when playback speed changes.
   });
 }
 

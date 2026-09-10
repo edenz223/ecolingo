@@ -9,14 +9,17 @@
     "lint": "eslint --ext .js,.vue ./",
     "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
     "test": "echo \"No test specified\" && exit 0",
+    "test:recordings": "node --test tests/recording-store.test.cjs",
     "dev": "quasar dev -m electron",
     "build": "quasar build --mode electron"
   },
   "dependencies": {
     "@quasar/extras": "^1.16.4",
+    "adm-zip": "^0.6.0",
     "howler": "^2.2.4",
     "jschardet": "^3.0.0",
     "quasar": "^2.8.0",
+    "sql.js": "^1.14.2",
     "vue": "^3.4.18",
     "vue-router": "^4.0.12"
   },

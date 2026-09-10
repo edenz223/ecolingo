@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu } from "electron";
 import path from "path";
 import os from "os";
 import { FileProcessor } from "./fileSystem";
+import { RecordingStore, lessonIdentity, atomicWrite } from './recording-store.cjs';
 
 const fileProcessor = new FileProcessor();
 
@@ -24,14 +25,14 @@ async function handleFolderOpen() {
     fileProcessor.processFolder(folderPath);
 
   if (incompleteLessons.length > 0) {
-    const message = `The following lessons are missing audio or lyrics files and will be skipped: ${incompleteLessons.join(
+    const message = `以下课程缺少音频或字幕，已跳过： ${incompleteLessons.join(
       ", "
     )}`;
     dialog.showMessageBox(mainWindow, {
       type: "warning",
-      title: "Incomplete Lessons",
+      title: "课程文件不完整",
       message: message,
-      buttons: ["OK"],
+      buttons: ["关闭"],
     });
   }
 
@@ -46,6 +47,50 @@ let mainWindow;
 // 修改 ipcMain 处理程序
 ipcMain.handle("openFolder", handleFolderOpen);
 ipcMain.handle("readTextFile", readTextFile);
+
+let recordingStorePromise;
+function getRecordingStore() {
+  if (!recordingStorePromise) {
+    recordingStorePromise = RecordingStore.open(path.join(app.getPath('userData'), 'recordings'))
+      .catch((error) => { recordingStorePromise = null; throw error; });
+  }
+  return recordingStorePromise;
+}
+
+ipcMain.handle('recordings:identity', (event, lesson) => lessonIdentity(lesson));
+ipcMain.handle('recordings:list', async (event, lessonId) => (await getRecordingStore()).list(lessonId));
+ipcMain.handle('recordings:save', async (event, meta, bytes) => (await getRecordingStore()).save(meta, bytes));
+ipcMain.handle('recordings:read', async (event, id) => (await getRecordingStore()).read(id));
+ipcMain.handle('recordings:export-wav', async (event, data) => {
+  const bytes = Buffer.from(data);
+  if (bytes.length < 44 || bytes.length > 90 * 1024 * 1024 ||
+      bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE') {
+    throw new Error('Invalid WAV audio.');
+  }
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: '导出本课合并录音', defaultPath: 'ecolingo-merged.wav',
+    filters: [{ name: 'WAV audio', extensions: ['wav'] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+  atomicWrite(result.filePath, bytes);
+  return result.filePath;
+});
+ipcMain.handle('recordings:export', async () => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: '导出全部录音备份', defaultPath: `ecolingo-recordings-${new Date().toISOString().slice(0, 10)}.zip`,
+    filters: [{ name: 'EcoLingo recording backup', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+  return (await getRecordingStore()).exportBackup(result.filePath);
+});
+ipcMain.handle('recordings:restore', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '合并恢复录音备份', properties: ['openFile'],
+    filters: [{ name: 'EcoLingo recording backup', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return (await getRecordingStore()).restoreBackup(result.filePaths[0]);
+});
 
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
@@ -88,7 +133,15 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow?.isMinimized()) mainWindow.restore();
+    mainWindow?.focus();
+  });
+  app.whenReady().then(createWindow);
+}
 
 app.on("window-all-closed", () => {
   if (platform !== "darwin") {
@@ -119,18 +172,18 @@ const template = [
             { role: "hideOthers" },
             { role: "unhide" },
             { type: "separator" },
-            { role: "quit" },
+            { label: "退出", role: "quit" },
           ],
         },
       ]
     : []),
   // { role: 'fileMenu' }
   {
-    label: "File",
+    label: "文件",
     submenu: [
-      isMac ? { role: "close" } : { role: "quit" },
+      isMac ? { label: "关闭窗口", role: "close" } : { label: "退出", role: "quit" },
       {
-        label: "Open Folder",
+        label: "打开课程文件夹",
         click: () => {
           handleFolderOpen();
         },
@@ -139,49 +192,49 @@ const template = [
   },
   // { role: 'editMenu' }
   {
-    label: "Edit",
+    label: "编辑",
     submenu: [
-      { role: "undo" },
-      { role: "redo" },
+      { label: "撤销", role: "undo" },
+      { label: "重做", role: "redo" },
       { type: "separator" },
-      { role: "cut" },
-      { role: "copy" },
-      { role: "paste" },
+      { label: "剪切", role: "cut" },
+      { label: "复制", role: "copy" },
+      { label: "粘贴", role: "paste" },
       ...(isMac
         ? [
             { role: "pasteAndMatchStyle" },
-            { role: "delete" },
-            { role: "selectAll" },
+            { label: "删除", role: "delete" },
+            { label: "全选", role: "selectAll" },
             { type: "separator" },
             {
-              label: "Speech",
+              label: "朗读",
               submenu: [{ role: "startSpeaking" }, { role: "stopSpeaking" }],
             },
           ]
-        : [{ role: "delete" }, { type: "separator" }, { role: "selectAll" }]),
+        : [{ label: "删除", role: "delete" }, { type: "separator" }, { label: "全选", role: "selectAll" }]),
     ],
   },
   // { role: 'viewMenu' }
   {
-    label: "View",
+    label: "视图",
     submenu: [
-      { role: "reload" },
-      { role: "forceReload" },
-      { role: "toggleDevTools" },
+      { label: "重新加载", role: "reload" },
+      { label: "强制重新加载", role: "forceReload" },
+      { label: "开发者工具", role: "toggleDevTools" },
       { type: "separator" },
-      { role: "resetZoom" },
-      { role: "zoomIn" },
-      { role: "zoomOut" },
+      { label: "实际大小", role: "resetZoom" },
+      { label: "放大", role: "zoomIn" },
+      { label: "缩小", role: "zoomOut" },
       { type: "separator" },
-      { role: "togglefullscreen" },
+      { label: "切换全屏", role: "togglefullscreen" },
     ],
   },
   // { role: 'windowMenu' }
   {
-    label: "Window",
+    label: "窗口",
     submenu: [
-      { role: "minimize" },
-      { role: "zoom" },
+      { label: "最小化", role: "minimize" },
+      { label: "缩放窗口", role: "zoom" },
       ...(isMac
         ? [
             { type: "separator" },
@@ -189,17 +242,21 @@ const template = [
             { type: "separator" },
             { role: "window" },
           ]
-        : [{ role: "close" }]),
+        : [{ label: "关闭窗口", role: "close" }]),
     ],
   },
   {
+    label: '帮助',
     role: "help",
     submenu: [
       {
-        label: "Learn More",
+        label: '键盘快捷键',
         click: async () => {
-          const { shell } = require("electron");
-          await shell.openExternal("https://electronjs.org");
+          await dialog.showMessageBox(mainWindow, {
+            type: 'info', title: '键盘快捷键',
+            message: '空格：播放 / 暂停\nS：跟读开关\nA / D：上一句 / 下一句\nQ / E：上一课 / 下一课\nC / X：加速 / 减速\nZ：重置速度\nM：静音',
+            buttons: ['关闭'],
+          });
         },
       },
     ],

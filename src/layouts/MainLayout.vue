@@ -1,18 +1,75 @@
 <template>
   <q-layout view="hHh lpR fFf" class="bg-grey-1">
     <q-header elevated class="bg-primary text-white">
-      <q-toolbar>
+      <q-toolbar class="wrap">
         <q-toolbar-title> Ecolingo </q-toolbar-title>
-        <q-btn flat @click="openFolder" icon="folder_open">
-          <q-tooltip class="small-tooltip">Open folder</q-tooltip>
+        <q-btn flat label="打开课程" icon="folder_open" @click="openFolder" />
+        <q-btn flat label="录音记录" icon="library_music" @click="showRecordingHistory" :disable="storageBusy" />
+        <q-btn flat label="更多" icon="more_horiz" :disable="storageBusy">
+          <q-menu>
+            <q-list style="min-width: 180px">
+              <q-item clickable v-close-popup @click="exportRecordings">
+                <q-item-section avatar><q-icon name="archive" /></q-item-section>
+                <q-item-section>导出录音备份</q-item-section>
+              </q-item>
+              <q-item clickable v-close-popup @click="exportMergedRecording" :disable="!Object.keys(recordings).length">
+                <q-item-section avatar><q-icon name="audio_file" /></q-item-section>
+                <q-item-section>导出本课合并音频</q-item-section>
+              </q-item>
+              <q-item clickable v-close-popup @click="restoreRecordings">
+                <q-item-section avatar><q-icon name="restore" /></q-item-section>
+                <q-item-section>恢复录音备份</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
         </q-btn>
       </q-toolbar>
     </q-header>
 
+    <q-dialog :model-value="Boolean(recordingError)" persistent aria-labelledby="recording-error-title"
+      aria-describedby="recording-error-message">
+      <q-card style="width: 420px; max-width: 90vw">
+        <q-card-section id="recording-error-title" class="text-h6 text-negative">
+          <q-icon name="warning" class="q-mr-sm" />录音提示
+        </q-card-section>
+        <q-card-section id="recording-error-message" class="q-pt-none">{{ recordingError }}</q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat color="primary" label="关闭" autofocus @click="closeRecordingError" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <q-dialog v-model="historyOpen" @hide="stopPreview">
+      <q-card style="width: 720px; max-width: 90vw">
+        <q-card-section class="text-h6">全部录音记录</q-card-section>
+        <q-card-section class="q-pt-none">
+          每次录音均保存在本地。备份包含全部录音和 SQLite 索引，恢复时合并并去重。
+          原课程音频和字幕需另行保存；重新打开相同内容的课程即可关联录音。
+        </q-card-section>
+        <q-card-section style="max-height: 55vh" class="scroll">
+          <div v-if="!recordingHistory.length">暂无录音</div>
+          <q-list separator>
+            <q-item v-for="clip in recordingHistory" :key="clip.id" :class="{ 'sentence-preview': previewClipId === clip.id }">
+              <q-item-section>
+                <q-item-label>{{ clip.lessonName }} · {{ clip.start.toFixed(2) }}s</q-item-label>
+                <q-item-label>{{ clip.text }}</q-item-label>
+                <q-item-label caption>{{ new Date(clip.createdAt).toLocaleString() }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn round flat :icon="previewClipId === clip.id ? 'stop_circle' : 'play_circle'"
+                  :aria-label="previewClipId === clip.id ? '停止回放' : '播放录音'" @click="previewRecording(clip)" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="right"><q-btn flat label="关闭" v-close-popup /></q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <q-drawer v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
       <q-scroll-area class="fit">
         <q-list>
-          <q-item-label header>Lesson List</q-item-label>
+          <q-item-label header>课程列表</q-item-label>
           <q-item v-for="(lesson, index) in lessons" :key="lesson.name" clickable v-ripple @click="playLesson(index)"
             :class="{
               'lesson-item': true,
@@ -28,39 +85,41 @@
 
     <q-page-container>
       <q-page padding>
-        <q-banner v-if="recordingError" class="bg-red-1 text-negative q-mb-md">
-          <template #avatar>
-            <q-icon name="warning" color="negative" />
-          </template>
-          {{ recordingError }}
-        </q-banner>
-        <div id="sentences" class="q-pa-md">
+        <q-banner v-if="storageMessage" class="bg-blue-1 q-mb-md">{{ storageMessage }}</q-banner>
+        <div v-if="!player.parsedSentences.value.length" class="lesson-empty">
+          <q-icon name="headphones" size="48px" color="primary" />
+          <div class="text-h6">{{ lessonLoading ? '正在打开课程…' : '开始今天的跟读' }}</div>
+          <div class="text-grey-7">选择包含音频和字幕的文件夹</div>
+          <q-btn unelevated color="primary" icon="folder_open" label="打开课程文件夹" :loading="lessonLoading" @click="openFolder" />
+        </div>
+        <div v-else class="lesson-progress">
+          <div class="ellipsis">{{ lessons[currentLessonIndex]?.name || player.currentLesson?.name }}</div>
+          <span class="text-grey-7">第 {{ Math.max(1, player.parsedSentences.value.indexOf(player.currentSentence.value) + 1) }} / {{ player.parsedSentences.value.length }} 句</span>
+          <q-btn v-if="!followSentence" flat dense color="primary" icon="my_location" label="回到当前句" @click="resumeFollowing" />
+        </div>
+        <div id="sentences" class="q-pa-md" @wheel.passive="pauseFollowing" @touchmove.passive="pauseFollowing">
           <q-list separator>
             <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
-              @click="player.clickSentence(s)" :active="player.currentSentence.value === s" :class="{
-                'shadowing-sentence':
-                  player.isShadowing.value &&
-                  player.currentSentence.value === s,
-                'sentence-being-recorded': currentRecordingSentence === s.start,
-                'sentence-has-recording': Boolean(recordings[s.start]),
-              }">
-              <q-item-section avatar v-if="
-                player.isShadowing.value && player.currentSentence.value === s
-              ">
-                <q-icon name="record_voice_over" color="blue" />
-              </q-item-section>
+              class="sentence-item" active-class="sentence-item--active"
+              :class="{ 'sentence-preview': previewClipId && recordings[s.start]?.id === previewClipId }"
+              @click="player.clickSentence(s)" :active="!previewClipId && player.currentSentence.value === s">
               <q-item-section>
                 <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
               </q-item-section>
               <q-item-section side class="sentence-actions">
-                <q-badge v-if="currentRecordingSentence === s.start" color="red-5" text-color="white"
-                  class="recording-badge">
-                  REC
-                </q-badge>
-                <q-btn v-if="recordings[s.start]" round dense flat icon="play_circle"
-                  @click.stop="playUserRecording(s.start)"
-                  :disable="isRecording && currentRecordingSentence === s.start">
-                  <q-tooltip class="small-tooltip">Play your recording</q-tooltip>
+                <div v-if="currentRecordingSentence === s.start || noSpeechSentence === s.start" class="sentence-recording">
+                  <div class="recording-indicator" role="img" :aria-label="noSpeechSentence === s.start ? '未检测到声音，已暂停' : '正在录音'">
+                    <span class="recording-mic" :class="{ 'recording-mic--active': recordingVoiceActive && noSpeechSentence !== s.start, 'recording-mic--silent': noSpeechSentence === s.start }" aria-hidden="true">
+                      <q-icon :name="noSpeechSentence === s.start ? 'mic_off' : 'mic'" size="18px" />
+                    </span>
+                  </div>
+                </div>
+                <q-btn v-if="recordings[s.start] && !isRecording && noSpeechSentence !== s.start" round dense flat
+                  :icon="previewClipId === recordings[s.start].id ? 'stop_circle' : 'play_circle'"
+                  :color="previewClipId === recordings[s.start].id ? 'primary' : undefined"
+                  :aria-label="previewClipId === recordings[s.start].id ? '停止回放' : '播放此句最新录音'"
+                  @click.stop="playUserRecording(s.start)">
+                  <q-tooltip class="small-tooltip">{{ previewClipId === recordings[s.start].id ? '停止回放' : '播放此句录音' }}</q-tooltip>
                 </q-btn>
               </q-item-section>
             </q-item>
@@ -70,68 +129,70 @@
     </q-page-container>
 
     <q-footer elevated class="bg-grey-8 text-white">
-      <q-toolbar>
-        <q-btn flat dense icon="skip_previous" @click="prev">
-          <q-tooltip class="small-tooltip">Previous lesson</q-tooltip>
+      <q-toolbar class="wrap playback-toolbar">
+        <div class="sentence-navigation">
+        <q-btn flat round icon="skip_previous" aria-label="上一句" :disable="!player.currentSentence.value" @click="beforeSentence">
+          <q-tooltip class="small-tooltip">上一句 · A</q-tooltip>
         </q-btn>
-        <q-btn flat dense icon="fast_rewind" @click="beforeSentence">
-          <q-tooltip class="small-tooltip">Previous sentence</q-tooltip>
-        </q-btn>
-        <q-btn flat dense :icon="player.sound.value && player.sound.value.playing()
+        <q-btn round unelevated color="primary" size="lg" :disable="!player.currentSentence.value"
+          :aria-label="player.isShadowing.value || (player.sound.value && player.sound.value.playing()) ? '暂停' : '播放'"
+          :icon="player.isShadowing.value || (player.sound.value && player.sound.value.playing())
           ? 'pause'
           : 'play_arrow'
           " @click="togglePlay">
           <q-tooltip class="small-tooltip">{{
-            player.sound.value && player.sound.value.playing()
-              ? "Pause"
-              : "Play"
-          }}</q-tooltip>
+            player.isShadowing.value || (player.sound.value && player.sound.value.playing())
+              ? "暂停"
+              : "播放"
+          }} · 空格</q-tooltip>
         </q-btn>
-        <q-btn flat dense icon="fast_forward" @click="nextSentence">
-          <q-tooltip class="small-tooltip">Next sentence</q-tooltip>
+        <q-btn flat round icon="skip_next" aria-label="下一句" :disable="!player.currentSentence.value" @click="nextSentence">
+          <q-tooltip class="small-tooltip">下一句 · D</q-tooltip>
         </q-btn>
-        <q-btn flat dense icon="skip_next" @click="next">
-          <q-tooltip class="small-tooltip">Next lesson</q-tooltip>
-        </q-btn>
+        </div>
 
         <q-space />
 
         <template v-if="!shadowingMode">
-          <div class="volume-control-container" @mouseenter="showVolumeSlider" @mouseleave="startHideTimer">
-            <q-btn flat dense icon="volume_up" class="volume-control" />
+          <q-btn flat dense icon="volume_up" class="volume-control" aria-label="音量" :disable="!player.sound.value">
+            <q-tooltip>音量 · M 静音</q-tooltip>
             <q-menu v-model="volumeSliderVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
-              class="q-pa-md no-shadow transparent" @mouseenter="cancelHideTimer" @mouseleave="startHideTimer">
-              <q-slider v-model="volume" :min="0" :max="100" vertical reverse @change="updateVolume" class="no-border"
+              class="q-pa-md">
+              <q-slider v-model="volume" aria-label="音量" :min="0" :max="100" vertical reverse @change="updateVolume" class="no-border"
                 style="height: 80px" />
             </q-menu>
-          </div>
+          </q-btn>
         </template>
-        <q-btn flat dense :icon="shadowingMode ? 'record_voice_over' : 'voice_over_off'" @click="toggleShadowingMode">
-          <q-tooltip class="small-tooltip">
-            {{ shadowingMode ? "Shadowing off" : "Shadowing on" }}
-          </q-tooltip>
-        </q-btn>
+          <q-toggle :model-value="shadowingMode" label="跟读" color="light-blue-4"
+            :disable="!player.sound.value" @update:model-value="toggleShadowingMode">
+            <q-tooltip class="small-tooltip">
+              {{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S
+            </q-tooltip>
+          </q-toggle>
         <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
+          :color="player.repeatOne.value ? 'light-blue-4' : undefined" :disable="!player.sound.value"
+          :aria-label="player.repeatOne.value ? '关闭单句循环' : '开启单句循环'" :aria-pressed="player.repeatOne.value"
           @click="player.repeatOne.value = !player.repeatOne.value">
           <q-tooltip class="small-tooltip">{{
-            player.repeatOne.value ? "Repeat one off" : "Repeat one on"
+            player.repeatOne.value ? '关闭单句循环' : '开启单句循环'
             }}</q-tooltip>
         </q-btn>
 
         <!-- Add this new button for playback rate control -->
-        <div @mouseenter="showPlaybackRateMenu" @mouseleave="startHidePlaybackRateTimer">
-          <q-btn flat dense :label="currentPlaybackRate + 'x'" class="playback-rate-control" />
+          <q-btn flat dense :label="currentPlaybackRate + 'x'" class="playback-rate-control" aria-label="播放速度" :disable="!player.sound.value">
+          <q-tooltip>播放速度 · C / X 调整，Z 重置</q-tooltip>
           <q-menu v-model="playbackRateMenuVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
-            class="q-pa-sm" @mouseenter="cancelHidePlaybackRateTimer" @mouseleave="startHidePlaybackRateTimer">
+            class="q-pa-sm">
             <q-list dense>
-              <q-item v-for="rate in playbackRates" :key="rate" clickable v-close-popup @click="setPlaybackRate(rate)">
-                <q-item-section>{{ rate }}x</q-item-section>
+              <q-item v-for="rate in playbackRates" :key="rate" clickable v-close-popup :active="Number(currentPlaybackRate) === rate" @click="setPlaybackRate(rate)">
+                <q-item-section>{{ rate }} 倍</q-item-section>
               </q-item>
             </q-list>
           </q-menu>
-        </div>
-        <q-btn flat dense icon="menu" @click="rightDrawerOpen = !rightDrawerOpen">
-          <q-tooltip class="small-tooltip">Toggle lesson list</q-tooltip>
+          </q-btn>
+        <q-btn flat dense icon="queue_music" label="课程" aria-label="显示或隐藏课程列表"
+          :aria-expanded="rightDrawerOpen" @click="rightDrawerOpen = !rightDrawerOpen">
+          <q-tooltip class="small-tooltip">课程列表 · Q / E 切换课程</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-footer>
@@ -141,38 +202,84 @@
 import { onMounted, ref, onUnmounted } from "vue";
 import { parseLRC } from "../utils/lyrics-util";
 import { Howl } from "howler";
+import { mergeRecordings } from '../utils/recording-export';
+import { createVoiceMonitor } from '../utils/voice-activity';
 
 const rightDrawerOpen = ref(true);
 const lessons = ref([]);
 const currentLessonIndex = ref(-1);
 const volume = ref(100);
 const volumeSliderVisible = ref(false);
-let hideTimerId = null;
+const followSentence = ref(true);
+const lessonLoading = ref(false);
 
 const shadowingMode = ref(false);
 const recordings = ref({});
 const isRecording = ref(false);
 const currentRecordingSentence = ref(null);
 const recordingError = ref("");
+let noSpeechNoticeTimer = null;
+const noSpeechSentence = ref(null);
+
+function clearNoSpeechNotice() {
+  clearTimeout(noSpeechNoticeTimer);
+  noSpeechNoticeTimer = null;
+  noSpeechSentence.value = null;
+}
+
+function closeRecordingError() {
+  recordingError.value = '';
+}
 let mediaRecorder = null;
 let mediaStream = null;
 let recordingChunks = [];
-let recordingTimeoutId = null;
+let voiceMonitor = null;
+let recordingAttempt = 0;
+let recordingStartedAt = 0;
+let completedShadow = null;
+const recordingStatus = ref('');
+const recordingVoiceActive = ref(false);
 let pendingRecordingSentence = null;
 let recorderInitPromise = null;
 let discardNextRecording = false;
 let previewAudio = null;
+let previewUrl = null;
+let previewSession = 0;
+const previewClipId = ref(null);
+let activeLessonId = null;
+let microphoneSession = 0;
+const pendingSaves = new Set();
+const storageBusy = ref(false);
+const storageMessage = ref('');
+const historyOpen = ref(false);
+const recordingHistory = ref([]);
 
 // Add these new refs and constants
 const playbackRateMenuVisible = ref(false);
 const currentPlaybackRate = ref(1);
 const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
-let hidePlaybackRateTimerId = null;
+
+function pauseFollowing() {
+  followSentence.value = false;
+}
+
+function resumeFollowing() {
+  followSentence.value = true;
+  player.handleSentenceChange(player.currentSentence.value);
+}
+
+function handleScrollPointer(event) {
+  if (event.clientX >= document.documentElement.clientWidth) pauseFollowing();
+}
 
 function handleKeyDown(event) {
-  console.log(event.code);
+  if (recordingError.value || historyOpen.value || storageBusy.value || event.target.closest('input, textarea, select, button, [role="switch"], [role="slider"], [contenteditable="true"]') || event.altKey || event.metaKey) return;
+  if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.code)) pauseFollowing();
+  if (!player.sound.value && !['KeyQ', 'KeyE', 'KeyR'].includes(event.code)) return;
+  if (event.ctrlKey && event.code !== 'KeyR') return;
+  if (!['Space', 'KeyS', 'KeyD', 'KeyA', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyM', 'KeyR'].includes(event.code)) return;
+  if (event.code === 'KeyR' && !event.ctrlKey) return;
   event.preventDefault();
-  event.target.blur();
   if (event.code === 'Space' && !event.target.closest('input, textarea')) {
     togglePlay();
   }
@@ -221,10 +328,13 @@ onMounted(() => {
   });
 
   window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('pointerdown', handleScrollPointer);
 });
 
 onUnmounted(() => {
+  clearTimeout(noSpeechNoticeTimer);
   window.removeEventListener('keydown', handleKeyDown);
+  window.removeEventListener('pointerdown', handleScrollPointer);
   player.releaseLesson();
   releaseRecordingResources();
 });
@@ -248,29 +358,42 @@ class Player {
 
   async playLesson(lesson) {
     this.releaseLesson();
+    lessonLoading.value = true;
+    followSentence.value = true;
     const sessionId = this.loadSessionId;
     this.currentLesson = lesson;
     const lyricsPath = lesson.lyrics.path + "/" + lesson.lyrics.name;
     const audioFilePath = lesson.audio.path + "/" + lesson.audio.name;
 
     try {
+      const lessonId = await window.fileAPI.recordingIdentity(JSON.parse(JSON.stringify(lesson)));
+      if (sessionId !== this.loadSessionId) return;
+      activeLessonId = lessonId;
+      await refreshRecordings(lessonId, sessionId);
+      if (sessionId !== this.loadSessionId) return;
       const content = await window.fileAPI.readTextFile(lyricsPath);
       if (sessionId !== this.loadSessionId) return;
       const sentences = lyricsPath.endsWith('.srt')
         ? parseSRT(content)
         : parseLRC(content);
-      if (!sentences.length) throw new Error('No sentences found in transcript.');
+      if (!sentences.length) throw new Error('字幕中没有可用的句子，请检查字幕文件。');
       this.initializeSound(audioFilePath, sentences, sessionId);
     } catch (error) {
       if (sessionId === this.loadSessionId) {
+        lessonLoading.value = false;
         console.error('Error:', error);
+        recordingError.value = error.message;
       }
     }
   }
 
   releaseLesson() {
+    lessonLoading.value = false;
     this.loadSessionId++;
     this.stopCurrentPlayback();
+    releaseRecordingResources();
+    activeLessonId = null;
+    recordings.value = {};
     clearTimeout(this.stepTimerId);
     this.stepTimerId = null;
     this.pendingSound?.unload();
@@ -297,6 +420,7 @@ class Player {
         rate: this.playbackRate.value,
         onload: () => {
           if (sessionId !== this.loadSessionId) return;
+          lessonLoading.value = false;
           sentences[sentences.length - 1].end = sound.duration();
           this.pendingSound = null;
           this.sound.value = sound;
@@ -305,6 +429,8 @@ class Player {
         },
         onloaderror: (id, error) => {
           if (sessionId !== this.loadSessionId) return;
+          lessonLoading.value = false;
+          recordingError.value = '课程音频无法打开，请检查文件是否存在且可以播放。';
           this.pendingSound = null;
           sound.unload();
           console.error('Error:', error);
@@ -331,7 +457,8 @@ class Player {
   }
 
   togglePlay() {
-    if (this.sound.value.playing()) {
+    stopPreview();
+    if (this.sound.value.playing() || this.isShadowing.value) {
       const sentence = this.currentSentence.value;
       const wasShadowing = this.isShadowing.value;
       this.stopCurrentPlayback();
@@ -343,6 +470,7 @@ class Player {
 
   step(ended = false) {
     if (!this.sound.value || !this.currentSentence.value) return;
+    if (this.isShadowing.value) return;
     if (!ended && !this.sound.value.playing()) return;
 
     const currentTime = ended ? this.sound.value.duration() : this.sound.value.seek() || 0;
@@ -352,20 +480,27 @@ class Player {
     ) {
       if (shadowingMode.value) {
         if (!this.isShadowing.value) {
-          this.sound.value.volume(0);
+          this.sound.value.pause();
+          clearTimeout(this.stepTimerId);
+          this.stepTimerId = null;
           this.isShadowing.value = true;
           startSentenceRecording(this.currentSentence.value);
-          this.sound.value.seek(this.currentSentence.value.start);
-          if (!this.sound.value.playing()) this.sound.value.play();
-          this.scheduleStep();
           return;
-        } else {
-          stopSentenceRecording();
-          this.sound.value.volume(this.volume.value / 100);
-          this.isShadowing.value = false;
         }
       }
 
+      this.advanceSentence();
+      return;
+    }
+    let currentSentence = this.findCurrentSentence(currentTime);
+    if (currentSentence !== this.currentSentence.value) {
+      this.currentSentence.value = currentSentence;
+      this.handleSentenceChange(currentSentence);
+    }
+    return this.scheduleStep();
+  }
+
+  advanceSentence() {
       if (this.repeatOne.value) {
         this.sound.value.seek(this.currentSentence.value.start);
         if (!this.sound.value.playing()) this.sound.value.play();
@@ -385,13 +520,6 @@ class Player {
       this.handleSentenceChange(nextSentence);
       this.scheduleStep();
       return;
-    }
-    let currentSentence = this.findCurrentSentence(currentTime);
-    if (currentSentence !== this.currentSentence.value) {
-      this.currentSentence.value = currentSentence;
-      this.handleSentenceChange(currentSentence);
-    }
-    return this.scheduleStep();
   }
 
   findCurrentSentence(currentTime) {
@@ -406,16 +534,9 @@ class Player {
   }
 
   handleSentenceChange(sentence) {
-    var element = document.getElementById(sentence.start.toString());
-    if (element && !this.isElementInViewport(element)) {
-      this.isScrolling.value = true;
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-      const sessionId = this.loadSessionId;
-      setTimeout(() => {
-        if (sessionId !== this.loadSessionId) return;
-        this.isScrolling.value = false;
-      }, 300);
-    }
+    if (!followSentence.value || !sentence) return;
+    const element = document.getElementById(sentence.start.toString());
+    element?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
   }
 
   getNextSentence() {
@@ -428,14 +549,17 @@ class Player {
   async clickSentence(sentence) {
     if (!this.sound.value || !sentence) return;
     this.stopCurrentPlayback();
+    stopPreview();
     this.currentSentence.value = sentence;
     this.sound.value.volume(this.volume.value / 100);
     this.isShadowing.value = false;
     this.sound.value.seek(sentence.start);
     this.sound.value.play();
+    this.handleSentenceChange(sentence);
   }
 
   stopCurrentPlayback() {
+    clearNoSpeechNotice();
     clearTimeout(this.stepTimerId);
     this.stepTimerId = null;
     if (this.sound.value?.playing()) {
@@ -590,86 +714,52 @@ function openFolder() {
 }
 
 function updateVolume(value) {
+  player.volume.value = value;
   if (player.sound.value) {
     player.sound.value.volume(value / 100);
   }
 }
 
-function showVolumeSlider() {
-  volumeSliderVisible.value = true;
-  cancelHideTimer();
-}
-
-function startHideTimer() {
-  cancelHideTimer();
-  hideTimerId = setTimeout(() => {
-    volumeSliderVisible.value = false;
-  }, 800);
-}
-
-function cancelHideTimer() {
-  if (hideTimerId !== null) {
-    clearTimeout(hideTimerId);
-    hideTimerId = null;
-  }
-}
-
 async function toggleShadowingMode() {
+  if (!player.sound.value) return;
   if (shadowingMode.value) {
+    const wasShadowing = player.isShadowing.value;
+    if (wasShadowing) player.stopCurrentPlayback();
     shadowingMode.value = false;
     stopSentenceRecording(true);
+    releaseRecordingResources();
     player.isShadowing.value = false;
     if (player.sound.value) {
       player.sound.value.volume(volume.value / 100);
+      if (wasShadowing) player.sound.value.seek(player.currentSentence.value.start);
     }
     return;
   }
 
+  const sessionId = player.loadSessionId;
   const ready = await ensureRecorderAccess();
-  if (ready) {
+  if (ready && sessionId === player.loadSessionId) {
     shadowingMode.value = true;
-  }
-}
-
-// Add these new functions
-function showPlaybackRateMenu() {
-  playbackRateMenuVisible.value = true;
-  cancelHidePlaybackRateTimer();
-}
-
-function startHidePlaybackRateTimer() {
-  cancelHidePlaybackRateTimer();
-  hidePlaybackRateTimerId = setTimeout(() => {
-    playbackRateMenuVisible.value = false;
-  }, 800);
-}
-
-function cancelHidePlaybackRateTimer() {
-  if (hidePlaybackRateTimerId !== null) {
-    clearTimeout(hidePlaybackRateTimerId);
-    hidePlaybackRateTimerId = null;
   }
 }
 
 function setPlaybackRate(rate) {
   currentPlaybackRate.value = rate;
-  if (player.sound.value) {
-    player.sound.value.rate(rate);
-  }
+  player.setPlaybackRate(Number(rate));
 }
 
 async function ensureRecorderAccess() {
   if (typeof window === "undefined") {
-    recordingError.value = "Recording is only available in the desktop app.";
+    recordingError.value = "录音仅支持桌面应用。";
     return false;
-  }
-
-  if (mediaRecorder) {
-    return true;
   }
 
   if (recorderInitPromise) {
     return recorderInitPromise;
+  }
+
+  if (mediaRecorder) {
+    return true;
   }
 
   const hasNavigator = typeof navigator !== "undefined";
@@ -678,41 +768,72 @@ async function ensureRecorderAccess() {
     !hasNavigator ||
     !navigator.mediaDevices?.getUserMedia
   ) {
-    recordingError.value = "Recording is not supported in this environment.";
+    recordingError.value = "当前环境不支持录音，请使用桌面应用。";
     return false;
   }
 
+  const accessSession = microphoneSession;
   recorderInitPromise = navigator.mediaDevices
     .getUserMedia({ audio: true })
-    .then((stream) => {
+    .then(async (stream) => {
+      if (accessSession !== microphoneSession) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
       mediaStream = stream;
       mediaRecorder = new MediaRecorder(stream);
+      const monitor = createVoiceMonitor(stream);
+      voiceMonitor = monitor;
+      await monitor.ready();
+      if (accessSession !== microphoneSession) return false;
       mediaRecorder.addEventListener("dataavailable", handleRecorderData);
       mediaRecorder.addEventListener("stop", handleRecorderStop);
       recordingError.value = "";
       return true;
     })
     .catch((error) => {
+      if (accessSession !== microphoneSession) return false;
+      if (player.isShadowing.value) {
+        player.stopCurrentPlayback();
+        player.sound.value?.seek(player.currentSentence.value.start);
+      }
+      releaseRecordingResources();
       recordingError.value =
-        error?.message || "Unable to access the microphone.";
+        error?.name === 'NotAllowedError' ? '麦克风访问被拒绝，请在系统设置中允许使用麦克风后重试。' :
+          error?.name === 'NotFoundError' ? '未检测到麦克风，请连接麦克风后重试。' :
+            `无法访问麦克风：${error?.message || '请检查设备连接。'}`;
       return false;
     })
     .finally(() => {
-      recorderInitPromise = null;
+      if (accessSession === microphoneSession) recorderInitPromise = null;
     });
 
   return recorderInitPromise;
 }
 
 function startSentenceRecording(sentence) {
+  clearNoSpeechNotice();
   if (!sentence || !shadowingMode.value) {
     return;
   }
 
   const sessionId = player.loadSessionId;
+  const maxMs = ((sentence.end - sentence.start) / Number(currentPlaybackRate.value)) * 2000;
+  if (!Number.isFinite(maxMs) || maxMs <= 0) {
+    player.stopCurrentPlayback();
+    recordingError.value = '当前句子的时长无效，无法开始录音。请检查字幕时间。';
+    return;
+  }
+  const attempt = ++recordingAttempt;
+  recordingStatus.value = '正在准备麦克风…';
   ensureRecorderAccess().then((ready) => {
+    if (attempt !== recordingAttempt) return;
+    if (!ready) {
+      player.stopCurrentPlayback();
+      player.sound.value?.seek(sentence.start);
+      return;
+    }
     if (
-      !ready ||
       !mediaRecorder ||
       shadowingMode.value === false ||
       !player.isShadowing.value ||
@@ -722,16 +843,22 @@ function startSentenceRecording(sentence) {
       return;
     }
 
-    if (mediaRecorder.state === "recording") {
-      discardNextRecording = true;
-      mediaRecorder.stop();
+    if (mediaRecorder.state === 'recording' || pendingRecordingSentence) {
+      player.stopCurrentPlayback();
+      player.sound.value?.seek(sentence.start);
+      recordingError.value = '上一段录音正在结束，请按播放重试。';
+      return;
     }
+    stopPreview();
 
     const duration =
       Math.max((sentence.end ?? sentence.start) - sentence.start, 0) || 0;
 
     pendingRecordingSentence = {
+      lessonId: activeLessonId,
+      lessonName: player.currentLesson.name,
       start: sentence.start,
+      end: sentence.end,
       text: sentence.text,
       duration,
     };
@@ -740,22 +867,47 @@ function startSentenceRecording(sentence) {
     recordingChunks = [];
     currentRecordingSentence.value = sentence.start;
     mediaRecorder.start();
-
-    if (recordingTimeoutId) {
-      clearTimeout(recordingTimeoutId);
-    }
-
-    // The playback clock ends recording, including when playback speed changes.
+    recordingStartedAt = performance.now();
+    recordingError.value = '';
+    voiceMonitor.start(({ state, reason, voiceActive }) => {
+      if (attempt !== recordingAttempt) return;
+      recordingVoiceActive.value = Boolean(voiceActive);
+      recordingStatus.value = { waiting: '请开始跟读…', speaking: '正在录音…', silence: '等待说完：静音 1.2 秒后结束' }[state];
+      if (reason) finishShadowing(reason);
+    }, { maxMs });
+  }).catch((error) => {
+    if (attempt !== recordingAttempt) return;
+    player.stopCurrentPlayback();
+    player.sound.value?.seek(sentence.start);
+    releaseRecordingResources();
+    recordingError.value = `录音启动失败：${error.message}`;
   });
 }
 
-function stopSentenceRecording(discard = false) {
-  if (recordingTimeoutId) {
-    clearTimeout(recordingTimeoutId);
-    recordingTimeoutId = null;
+function finishShadowing(reason = 'manual') {
+  if (!isRecording.value || completedShadow) return;
+  if (reason === 'no-speech') {
+    player.stopCurrentPlayback();
+    player.sound.value?.seek(player.currentSentence.value.start);
+    noSpeechSentence.value = player.currentSentence.value.start;
+    noSpeechNoticeTimer = setTimeout(() => {
+      clearNoSpeechNotice();
+    }, 1000);
+    return;
   }
+  completedShadow = { sessionId: player.loadSessionId, sentence: player.currentSentence.value };
+  recordingStatus.value = reason === 'limit' ? '已达到本句播放时长的两倍，正在保存…' : '正在完成录音…';
+  stopSentenceRecording();
+}
+
+function stopSentenceRecording(discard = false) {
+  recordingVoiceActive.value = false;
+  recordingAttempt++;
+  voiceMonitor?.stop();
 
   if (discard) {
+    completedShadow = null;
+    recordingStatus.value = '';
     discardNextRecording = true;
   }
 
@@ -765,8 +917,7 @@ function stopSentenceRecording(discard = false) {
   }
 
   if (discard) {
-    resetRecordingState();
-    discardNextRecording = false;
+    if (!pendingRecordingSentence) resetRecordingState();
   }
 }
 
@@ -777,10 +928,9 @@ function handleRecorderData(event) {
 }
 
 function handleRecorderStop() {
-  if (recordingTimeoutId) {
-    clearTimeout(recordingTimeoutId);
-    recordingTimeoutId = null;
-  }
+  voiceMonitor?.stop();
+  const completion = completedShadow;
+  completedShadow = null;
 
   const shouldDiscard = discardNextRecording;
   discardNextRecording = false;
@@ -791,6 +941,7 @@ function handleRecorderStop() {
     recordingChunks.length === 0
   ) {
     resetRecordingState();
+    if (!shouldDiscard && completion) player.stopCurrentPlayback();
     return;
   }
 
@@ -798,29 +949,100 @@ function handleRecorderStop() {
     type: mediaRecorder?.mimeType || "audio/webm",
   });
 
+  pendingRecordingSentence.duration = (performance.now() - recordingStartedAt) / 1000;
   saveRecording(pendingRecordingSentence, blob);
   resetRecordingState();
+  if (completion && completion.sessionId === player.loadSessionId &&
+      completion.sentence === player.currentSentence.value && player.isShadowing.value) {
+    player.isShadowing.value = false;
+    player.advanceSentence();
+  }
 }
 
 function saveRecording(meta, blob) {
-  const url = URL.createObjectURL(blob);
-  const existing = recordings.value[meta.start];
-  if (existing?.url) {
-    URL.revokeObjectURL(existing.url);
-  }
+  const sessionId = player.loadSessionId;
+  const task = (async () => {
+    try {
+      const clip = await window.fileAPI.saveRecording({
+        lessonId: meta.lessonId, lessonName: meta.lessonName,
+        start: meta.start, end: meta.end, text: meta.text, mime: blob.type,
+      }, await blob.arrayBuffer());
+      if (sessionId === player.loadSessionId && meta.lessonId === activeLessonId) {
+        recordings.value = { ...recordings.value, [meta.start]: clip };
+      }
+    } catch (error) {
+      recordingError.value = `录音保存失败：${error.message}`;
+      throw error;
+    }
+  })();
+  pendingSaves.add(task);
+  task.finally(() => pendingSaves.delete(task)).catch(() => {});
+}
 
-  recordings.value = {
-    ...recordings.value,
-    [meta.start]: {
-      url,
-      text: meta.text,
-      duration: meta.duration,
-      updatedAt: Date.now(),
-    },
-  };
+async function refreshRecordings(lessonId = activeLessonId, sessionId = player.loadSessionId) {
+  if (!lessonId) return;
+  const clips = await window.fileAPI.listRecordings(lessonId);
+  if (sessionId !== player.loadSessionId || lessonId !== activeLessonId) return;
+  const latest = {};
+  for (const clip of clips) {
+    if (!latest[clip.start]) latest[clip.start] = clip;
+  }
+  recordings.value = latest;
+}
+
+async function withStorageAction(action) {
+  if (storageBusy.value) return;
+  storageBusy.value = true;
+  storageMessage.value = '';
+  player.stopCurrentPlayback();
+  stopPreview();
+  try {
+    await Promise.all([...pendingSaves]);
+    await action();
+  } catch (error) {
+    recordingError.value = `录音操作失败：${error.message}`;
+  } finally {
+    storageBusy.value = false;
+  }
+}
+
+function showRecordingHistory() {
+  return withStorageAction(async () => {
+    recordingHistory.value = await window.fileAPI.listRecordings();
+    historyOpen.value = true;
+  });
+}
+
+function exportRecordings() {
+  return withStorageAction(async () => {
+    const result = await window.fileAPI.exportRecordings();
+    if (result) storageMessage.value = `已导出 ${result.count} 条录音：${result.path}`;
+  });
+}
+
+function exportMergedRecording() {
+  return withStorageAction(async () => {
+    const clips = Object.values(recordings.value).sort((a, b) => a.start - b.start);
+    if (!clips.length) return;
+    storageMessage.value = '正在按句子顺序合并本课每句最新录音…';
+    const bytes = await mergeRecordings(clips, (id) => window.fileAPI.readRecording(id));
+    const destination = await window.fileAPI.exportMergedRecording(bytes);
+    storageMessage.value = destination ? `已合并 ${clips.length} 句：${destination}。如需恢复记录，请使用“导出备份”。` : '';
+  });
+}
+
+function restoreRecordings() {
+  return withStorageAction(async () => {
+    const result = await window.fileAPI.restoreRecordings();
+    if (!result) return;
+    await refreshRecordings();
+    storageMessage.value = `恢复完成：新增 ${result.added} 条，已存在 ${result.skipped} 条。`;
+  });
 }
 
 function resetRecordingState() {
+  recordingVoiceActive.value = false;
+  recordingStatus.value = '';
   isRecording.value = false;
   currentRecordingSentence.value = null;
   pendingRecordingSentence = null;
@@ -829,34 +1051,68 @@ function resetRecordingState() {
 }
 
 function playUserRecording(sentenceStart) {
-  const recording = recordings.value[sentenceStart];
-  if (!recording) {
+  const clip = recordings.value[sentenceStart];
+  if (clip) previewRecording(clip);
+}
+
+function stopPreview() {
+  previewSession++;
+  previewClipId.value = null;
+  if (previewAudio) {
+    previewAudio.onended = null;
+    previewAudio.onerror = null;
+    previewAudio.pause();
+    previewAudio.removeAttribute('src');
+    previewAudio.load();
+    previewAudio = null;
+  }
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null;
+}
+
+async function previewRecording(clip) {
+  if (previewClipId.value === clip.id) {
+    stopPreview();
     return;
   }
-
-  if (previewAudio) {
-    previewAudio.pause();
+  player.stopCurrentPlayback();
+  stopPreview();
+  previewClipId.value = clip.id;
+  const session = previewSession;
+  try {
+    const { bytes, mime } = await window.fileAPI.readRecording(clip.id);
+    if (session !== previewSession) return;
+    previewUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    previewAudio = new Audio(previewUrl);
+    previewAudio.onended = () => {
+      if (session === previewSession) stopPreview();
+    };
+    previewAudio.onerror = () => {
+      if (session !== previewSession) return;
+      stopPreview();
+      recordingError.value = '录音无法播放，请检查录音文件是否完整。';
+    };
+    await previewAudio.play();
+  } catch (error) {
+    if (session === previewSession) {
+      stopPreview();
+      recordingError.value = `录音播放失败：${error.message}`;
+    }
   }
-
-  previewAudio = new Audio(recording.url);
-  previewAudio.play();
 }
 
 function releaseRecordingResources() {
-  if (previewAudio) {
-    previewAudio.pause();
-    previewAudio = null;
-  }
-
-  Object.values(recordings.value).forEach((clip) => {
-    if (clip?.url) {
-      URL.revokeObjectURL(clip.url);
-    }
-  });
-
+  recordingAttempt++;
+  completedShadow = null;
+  voiceMonitor?.dispose();
+  voiceMonitor = null;
+  microphoneSession++;
+  recorderInitPromise = null;
+  stopPreview();
   if (mediaRecorder) {
     mediaRecorder.removeEventListener("dataavailable", handleRecorderData);
     mediaRecorder.removeEventListener("stop", handleRecorderStop);
+    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     mediaRecorder = null;
   }
 
@@ -864,11 +1120,64 @@ function releaseRecordingResources() {
     mediaStream.getTracks().forEach((track) => track.stop());
     mediaStream = null;
   }
+  resetRecordingState();
 }
 </script>
 <style>
-.q-item.q-item--active {
-  background-color: #e0e0e0;
+.lesson-empty {
+  min-height: 55vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.lesson-progress {
+  position: sticky;
+  top: 50px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.lesson-progress .ellipsis {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.sentence-item.sentence-preview,
+.sentence-preview {
+  background: #eaf2ff;
+  box-shadow: inset -3px 0 #1976d2;
+}
+
+.sentence-item {
+  min-height: 64px;
+  color: #374151;
+}
+
+.sentence-item.sentence-item--active {
+  background-color: #eaf2ff;
+  color: #1e40af;
+}
+
+.playback-toolbar {
+  gap: 8px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.sentence-navigation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .q-drawer {
@@ -903,17 +1212,6 @@ function releaseRecordingResources() {
   transition: opacity 0.3s;
 }
 
-.shadowing-sentence {
-  background-color: rgba(0, 128, 255, 0.1);
-  border-left: 4px solid #0080ff;
-  font-weight: bold;
-  transition: all 0.3s ease;
-}
-
-.shadowing-sentence .q-item__label {
-  color: #0080ff;
-}
-
 .playback-rate-container {
   position: relative;
   display: inline-block;
@@ -926,21 +1224,79 @@ function releaseRecordingResources() {
 .sentence-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 0 52px;
+  width: 52px;
+  min-height: 44px;
+  padding-left: 12px;
   gap: 6px;
 }
 
-.recording-badge {
-  font-weight: 600;
-  letter-spacing: 0.5px;
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.sentence-being-recorded {
-  border-left: 4px solid #f44336;
-  background-color: rgba(244, 67, 54, 0.08);
+.sentence-recording {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 4px;
+  white-space: normal;
 }
 
-.sentence-has-recording:not(.sentence-being-recorded) {
-  border-left: 4px solid #2e7d32;
-  background-color: rgba(76, 175, 80, 0.08);
+.recording-mic {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #d32f2f;
+  background: #ffebee;
 }
+
+.recording-mic--active {
+  color: #2e7d32;
+  background: #e8f5e9;
+}
+
+.recording-mic--active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid #43a047;
+  border-radius: 50%;
+  animation: recording-pulse 900ms ease-out infinite;
+}
+
+@keyframes recording-pulse {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(1.45); opacity: 0; }
+}
+
+.recording-mic--silent {
+  color: #9a6700;
+  background: #fff3cd;
+}
+
+.recording-mic--silent::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid #d49b00;
+  border-radius: 50%;
+  animation: recording-pulse 500ms ease-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-mic--active::after,
+  .recording-mic--silent::after {
+    animation: none;
+  }
+}
+
 </style>

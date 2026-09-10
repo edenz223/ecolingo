@@ -1,98 +1,105 @@
-# EcoLingo agent guide
+# EcoLingo Agent 指南
 
-## Product and scope
+## 产品定位
 
-EcoLingo is a desktop language-learning app for practicing shadowing with local audio and timed transcripts. The core workflow is to open a lesson folder, listen to a sentence, repeat it aloud during the shadowing interval, and replay the learner's recording.
+EcoLingo 是一款桌面语言学习应用，使用本地音频和带时间轴的字幕练习影子跟读。核心流程：打开课程文件夹、听一句原音、在跟读阶段复述、回放自己的录音。
 
-Prioritize accurate sentence timing, reliable playback and recording, readable transcripts, and quick keyboard navigation. Keep the core workflow local and usable without an account or network connection. Add cloud services, speech assessment, or recording uploads only when requested.
+优先保证句子计时准确、播放和录音可靠、字幕清晰、键盘操作快捷。核心功能应保持本地可用，无需账号或网络。仅在明确要求时引入云服务、语音评测或录音上传。
 
-## Stack and code map
+## 技术栈与代码结构
 
-- Vue 3 with JavaScript and Composition API (`<script setup>`), Quasar 2, and Quasar CLI with Vite.
-- Electron provides the desktop window, native folder picker, and filesystem access.
-- Howler handles lesson playback; browser `MediaRecorder` and `getUserMedia` handle microphone recording.
-- `src/layouts/MainLayout.vue`: active learning interface, `Player` class, SRT parsing, shortcuts, shadowing, and recording lifecycle. Start here for playback changes.
-- `src/utils/lyrics-util.js`: LRC parsing into sentence objects.
-- `src-electron/electron-main.js`: window configuration, menus, and IPC handlers.
-- `src-electron/electron-preload.js`: `window.fileAPI` bridge (`openFolder`, `onFolderSelected`, `readTextFile`).
-- `src-electron/fileSystem.js`: audio/transcript pairing and transcript encoding detection with `jschardet`.
-- `src/router/`: routes; `src/pages/IndexPage.vue` is still a starter page, not the learning interface.
-- `src/css/`: shared styles and Quasar theme variables.
-- `resources/`: sample audio and LRC files for manual checks.
-- `quasar.config.js`: build and Electron packaging configuration.
+- Vue 3、JavaScript、Composition API（`<script setup>`）、Quasar 2、Quasar CLI with Vite。
+- Electron 提供桌面窗口、原生文件夹选择和文件系统访问。
+- Howler 负责课程播放；`MediaRecorder` 和 `getUserMedia` 负责麦克风录音。
+- `src/layouts/MainLayout.vue`：学习界面、`Player` 类、SRT 解析、快捷键、跟读和录音生命周期。播放改动从这里开始。
+- `src/utils/lyrics-util.js`：LRC 解析。
+- `src-electron/electron-main.js`：窗口、菜单和 IPC。
+- `src-electron/electron-preload.js`：`window.fileAPI` 桥接（`openFolder`、`onFolderSelected`、`readTextFile`）。
+- `src-electron/fileSystem.js`：音频/字幕配对，并用 `jschardet` 检测字幕编码。
+- `src/router/`：路由；`src/pages/IndexPage.vue` 仍是初始页面，不是学习界面。
+- `src/css/`：公共样式和 Quasar 主题变量。
+- `resources/`：手动检查用的音频和 LRC 示例。
+- `quasar.config.js`：构建和 Electron 打包配置。
 
-Check imports before editing `src-electron/player.js`; the active player implementation is in `MainLayout.vue`.
+修改 `src-electron/player.js` 前先检查引用；实际播放器位于 `MainLayout.vue`。
 
-## Development commands
+## 开发命令
 
-Use the scripts in `package.json` as the source of truth; the README still contains generic Quasar starter instructions.
+以 `package.json` 为准；README 仍含 Quasar 通用说明。
 
-| Command | Purpose |
+| 命令 | 用途 |
 | --- | --- |
-| `npm install` | Install dependencies when needed |
-| `npm run dev` | Launch Quasar in Electron development mode |
-| `npm run lint` | Run ESLint on JavaScript and Vue files |
-| `npm run build` | Build and package the Electron app |
-| `npm run format` | Format the entire repository; prefer targeting changed files |
-| `npm test` | Placeholder only; does not run a test suite |
+| `npm install` | 按需安装依赖 |
+| `npm run dev` | 启动 Electron 开发模式 |
+| `npm run lint` | 检查 JavaScript 和 Vue 文件 |
+| `npm run build` | 构建并打包应用 |
+| `npm run format` | 格式化仓库；优先只处理改动文件 |
+| `npm test` | 占位命令，不执行测试 |
 
-`package.json` declares Node 16/18/20 support, while the Quasar build targets Node 20. Match the project's configured runtime when diagnosing compatibility; do not upgrade the stack as part of unrelated work.
+`package.json` 声明支持 Node 16/18/20，Quasar 构建目标为 Node 20。排查兼容性时遵循项目配置，不要在无关任务中升级技术栈。
 
-Both `package-lock.json` and `yarn.lock` exist. Follow the package manager used for the task and avoid incidental lockfile changes. Do not delete or regenerate either lockfile merely to standardize tooling.
+仓库同时包含 `package-lock.json` 和 `yarn.lock`。沿用当前任务的包管理器，避免无关锁文件变更；不要仅为统一工具而删除或重建锁文件。
 
-## Implementation conventions
+## 实现规范
 
-- Keep changes focused and preserve unrelated user edits. Avoid whole-file formatting of existing code.
-- Follow `.editorconfig`, `.prettierrc`, and `.eslintrc.cjs`: two-space indentation, LF, semicolons, and single quotes in formatted JavaScript.
-- Reuse Quasar components and existing visual conventions. Give icon controls accessible names and keep focus and keyboard behavior usable.
-- Keep filesystem operations in the Electron main process and expose narrowly scoped operations through the preload bridge. Do not expose raw IPC or Node APIs to the renderer.
-- Preserve `contextIsolation` and sandboxing. The current window sets `webSecurity: false`; treat this as existing technical debt, not a pattern to extend. Verify local audio loading when changing this setting.
-- As playback work grows, extract cohesive parsing or lifecycle logic into utilities or Vue composables instead of adding more unrelated responsibilities to `MainLayout.vue`. Avoid broad rewrites for small fixes.
-- Do not hand-edit generated files in `.quasar/`, `dist/`, or `node_modules/`.
+- 聚焦当前任务，保留用户的无关改动，避免整文件格式化。
+- 遵循 `.editorconfig`、`.prettierrc` 和 `.eslintrc.cjs`：两空格缩进、LF、分号，JavaScript 使用单引号。
+- 复用 Quasar 组件和现有视觉规范；图标按钮须有无障碍名称，并保持焦点和键盘操作可用。
+- 文件系统操作放在 Electron 主进程，只通过 preload 暴露范围明确的方法；不得向渲染进程暴露原始 IPC 或 Node API。
+- 保持 `contextIsolation` 和沙箱启用。当前 `webSecurity: false` 是已有技术债，不应扩散；修改时须验证本地音频加载。
+- 播放逻辑增长时，将独立的解析或生命周期逻辑提取到工具函数或 Vue composable；小改动避免大重写。
+- 不要手改 `.quasar/`、`dist/` 或 `node_modules/` 中的生成文件。
 
-## Lesson and timing rules
+## 课程与计时规则
 
-- Lessons pair audio and transcript files by basename. Recognized audio extensions are MP3, WAV, OGG, AAC, FLAC, and M4A; transcripts use LRC or SRT. Preserve existing formats when extending import behavior.
-- Sentence objects use `{ start, end, text }`, with times in seconds. LRC parsing derives each end from the next start; the player currently fills the final sentence end from audio duration.
-- Preserve Unicode, multilingual text, and encoding detection. Render imported transcripts as text rather than executable HTML.
-- When changing import or parsing, handle empty files, malformed timestamps, missing pairs, inaccessible paths, and filenames with spaces or non-Latin characters. Surface actionable errors without crashing playback.
-- Keep highlighting, seeking, repeat-one behavior, and shadowing aligned with the audio clock. Account for playback speed when converting sentence duration into recording timers.
-- Cancel stale asynchronous work on lesson changes so an earlier file load or microphone request cannot overwrite the active session.
-- Sentence transitions use a single 20 ms timer reading the audio clock, with an audio-end callback for the final sentence. Keep them independent of animation frames and transcript scrolling. Electron background throttling is disabled so minimized windows can continue shadowing; this does not prevent system sleep.
+- 课程按基础文件名配对音频和字幕。音频支持 MP3、WAV、OGG、AAC、FLAC、M4A；字幕支持 LRC、SRT。扩展导入时保留现有格式。
+- 句子格式为 `{ start, end, text }`，时间单位为秒。LRC 的 `end` 取下一句的 `start`；最后一句由播放器用音频时长补齐。
+- 保留 Unicode、多语言文本和编码检测；字幕必须按文本渲染，不能作为 HTML 执行。
+- 导入或解析须处理空文件、错误时间戳、缺失配对、路径不可访问，以及含空格或非拉丁字符的文件名。错误提示应可操作，且不能导致播放崩溃。
+- 高亮、跳转、单句循环和跟读须与音频时钟同步；录音计时须考虑播放速度。
+- 切换课程时取消过期异步任务，防止旧文件加载或麦克风请求覆盖当前会话。
+- 句子切换使用一个每 20 ms 读取音频时钟的定时器，最后一句由音频结束回调处理；不得依赖动画帧或字幕滚动。Electron 已关闭后台节流，使最小化后仍可跟读，但不能阻止系统休眠。
 
-## Playback and recording rules
+## 播放与录音规则
 
-- Preserve the listen-then-shadow cycle: play the reference sentence, pause reference audio, wait 500 ms, then record; advance or repeat only after MediaRecorder's final stop event. `src/utils/voice-activity.js` uses local Web Audio RMS detection with a low-noise adaptive threshold: 120 ms of speech (including brief single words), 1.2 seconds trailing silence, and up to 8 seconds to start speaking. The recording limit is a fixed 10 seconds starting when recording actually begins; this also bounds the no-speech wait. No-speech pauses without saving. Takes finish automatically on trailing silence or the sentence time limit; there is no manual completion button. The recording microphone floats at the bottom center above the footer: it starts red, then turns green with outward-diffusing green particles while the local detector receives voice activity; respect reduced-motion preferences. There is no REC badge or visible status text. Sentence recording-preview buttons are hidden while recording. No-speech uses the same floating position with an amber mic-off icon and a brief amber particle diffusion for one second, without a popup, while playback stays paused; navigation or retry clears it; other microphone and recording errors use a persistent dialog dismissed with its Close button; playback shortcuts are disabled while it is open. Space still cancels/pauses. Recording timing is independent of audio-end events and scrolling.
-- After building, run `node_modules/.bin/electron.cmd tests/learning-ui-smoke.cjs` for an isolated, muted built-UI check of the empty state, progress, click menus, follow control, and preview toggle using sample files. This uses no real microphone or user recordings.
-- Recording feedback uses a 60 px floating disc with a soft red breathing ring, green ripples and small staggered particles during speech, and a single amber diffusion on no-speech timeout. Entry and exit fade gently; reduced-motion disables transitions and looping effects.
-- Run `node --test tests/voice-activity.test.cjs` for detector and playback/recording lifecycle regression checks. Run `node_modules/.bin/electron.cmd tests/voice-activity-smoke.cjs` for a hidden Chromium synthetic-audio check; neither substitutes for real microphone testing.
-- Ensure pause, seek, sentence navigation, lesson switching, and disabling shadowing leave playback and recording in a consistent state. Avoid overlapping reference audio and recording previews.
-- Request microphone access through an explicit learning action, show recording state clearly, and handle denied permission or missing devices gracefully.
-- Stop media tracks, unload replaced sounds, cancel timers/animation loops, remove listeners, and revoke object URLs when their owning session ends.
-- Completed recordings are persisted by `src-electron/recording-store.cjs` under Electron `userData/recordings`: audio files plus `index.sqlite` (sql.js). Each take has a UUID; lesson identity hashes audio and transcript contents so moving a folder preserves associations. The lesson list remains in `localStorage`; object URLs are temporary previews only.
-- The top toolbar keeps Open Course, recording history, and a More menu. More contains ZIP backup export/merge restore (SQLite plus audio, versioned and checksum-validated, 512 MB limit), and current-lesson WAV export (latest take per sentence in chronological order, mono 24 kHz, 30-minute limit). WAV is listening-only; restore uses ZIP. Original lesson files are not included in recording backups and must be kept separately.
-- Store operations remain in Electron main through narrow preload methods. Write audio before atomically replacing the index; never extract arbitrary archive paths. Run `npm run test:recordings` for persistence, merge, rollback and lesson-identity regression coverage.
-- When changing recording storage, associate clips with both lesson identity and sentence identity. A timestamp alone can collide across lessons.
-- Playback preferences (volume, mute, speed, shadowing, repeat-one, and course drawer state) are saved immediately in localStorage under ecolingo.settings.v1 through src/utils/settings.js. Restore preferences without requesting microphone access at startup. Run node --test tests/settings.test.cjs for validation and storage failure coverage.
-- Keep learner audio local unless an explicitly requested feature requires otherwise.
-- The learning view offers a folder-opening empty state and a sticky course title/sentence counter. Automatic scrolling centers sentence transitions; wheel, touch, navigation keys, or scrollbar dragging pause following until “回到当前句” is clicked. The footer uses a labeled shadowing toggle and click-open volume/speed menus. Recording previews toggle between play and stop, highlight their sentence, and cancel pending loads when stopped. Controls and native menus use Chinese, with shortcuts under Help.
-- The footer emphasizes previous sentence, play/pause, and next sentence; lesson selection is in the course drawer. Sentence rows reserve a fixed action slot for the microphone or recording preview and use one pale-blue active highlight without recording-history background colors.
-- Preserve existing shortcuts unless the task changes them: Space play/pause; S shadowing; A/D previous/next sentence; Q/E previous/next lesson; C/X increase/decrease speed; Z reset speed; M mute.
-- Shortcut handlers should ignore editable controls, preserve normal focus behavior, and prevent default actions only for shortcuts they handle. Guard controls when no lesson is loaded.
+- 保持“先听后跟”：播放原句、暂停原音、等待 500 ms、开始录音；仅在 `MediaRecorder` 最终停止事件后前进或重复。
+- `src/utils/voice-activity.js` 使用本地 Web Audio RMS 检测和低噪声自适应阈值：连续 120 ms 语音即视为开口，尾部静音 1.2 秒后结束，最长等待开口 8 秒。录音从真正开始时计时，固定上限 10 秒，也约束无语音等待。无语音时暂停且不保存；录音在尾部静音或时限到达时自动完成，不设手动完成按钮。
+- 录音麦克风悬浮在底栏上方正中，尺寸 60 px：初始为红色柔和呼吸环；检测到语音后变绿，并显示绿色波纹和错落小粒子；无语音时在同一位置显示琥珀色麦克风关闭图标，并播放一次持续 1 秒的扩散效果。进入和退出柔和淡入淡出；减少动态效果偏好下禁用过渡和循环动画。
+- 不显示 REC 标记或状态文字。录音时隐藏句子录音预览。无语音不弹窗，播放保持暂停，导航或重试会清除提示。其他麦克风或录音错误使用持久对话框，点击“关闭”后消失；对话框打开时禁用播放快捷键。空格仍可取消或暂停。录音计时不依赖音频结束事件或滚动。
+- 暂停、跳转、句子导航、课程切换和关闭跟读后，播放与录音状态须一致；不得让原音与录音预览重叠。
+- 仅由明确的学习操作触发麦克风权限；清晰显示录音状态，并妥善处理拒绝授权或无设备情况。
+- 会话结束时停止媒体轨道、卸载替换的音频、取消计时器和动画循环、移除监听器并撤销对象 URL。
+- 完成录音由 `src-electron/recording-store.cjs` 保存到 Electron `userData/recordings`，包括音频和 `index.sqlite`（sql.js）。每次录音有 UUID；课程标识由音频和字幕内容哈希生成，移动文件夹后仍可关联。课程列表保存在 `localStorage`；对象 URL 仅供临时预览。
+- 存储操作须留在 Electron 主进程，并通过窄范围 preload 方法调用。先写音频，再原子替换索引；绝不能解压任意归档路径。录音须同时关联课程标识和句子标识，不能只用可能跨课程冲突的时间戳。
+- 顶部工具栏保留“打开课程”、录音历史和“更多”。“更多”含 ZIP 备份导出/合并恢复（SQLite 与音频、版本和校验和验证、上限 512 MB），以及当前课程 WAV 导出（每句取最新录音并按时间排序，单声道 24 kHz，上限 30 分钟）。WAV 仅供收听，恢复使用 ZIP。备份不含原始课程文件。
+- 播放偏好（音量、静音、速度、跟读、单句循环、课程抽屉状态）通过 `src/utils/settings.js` 立即保存到 `localStorage` 的 `ecolingo.settings.v1`。启动恢复偏好时不得请求麦克风。
+- 除非明确要求，否则学习者录音必须保留在本地。
+- 学习页包含打开文件夹的空状态，以及固定的课程标题和句子计数。句子切换时自动滚动居中；滚轮、触摸、导航键或拖动滚动条会暂停跟随，直到点击“回到当前句”。底栏使用带标签的跟读开关及点击展开的音量、速度菜单。录音预览在播放/停止间切换、高亮对应句子，并在停止时取消待处理加载。控件和原生菜单使用中文，快捷键说明位于“帮助”。
+- 底栏突出上一句、播放/暂停和下一句；课程选择位于课程抽屉。句子行预留固定操作位显示麦克风或录音预览，只使用一种浅蓝色活动高亮，不使用录音历史背景色。
+- 除非任务要求，否则保留快捷键：空格播放/暂停；S 跟读；A/D 上一句/下一句；Q/E 上一课/下一课；C/X 加速/减速；Z 重置速度；M 静音。
+- 快捷键处理应忽略可编辑控件，保留正常焦点行为，只阻止已处理快捷键的默认动作；未加载课程时禁用相关控制。
 
-## Validation and delivery
+## 验证与交付
 
-For code changes, run `npm run lint`. Run `npm run build` for changes affecting runtime behavior, dependencies, Electron, or packaging. For documentation-only changes, review the content and diff; an application build is unnecessary.
+代码改动后运行 `npm run lint`。影响运行时、依赖、Electron 或打包时运行 `npm run build`。纯文档改动只检查内容和 diff，无需构建。
 
-`npm test` remains a placeholder. Run `npm run test:recordings` for the focused storage regression suite and `node_modules/.bin/electron tests/recording-audio-smoke.cjs` (use `electron.cmd` on Windows) for real Chromium WAV decoding/merging checks in a hidden window. These checks do not cover microphone permissions or the full desktop workflow. For parser or playback bug fixes, add focused regression coverage when practical and state how it was run.
+按改动范围执行：
 
-Manually exercise the affected desktop workflow where possible:
+- 构建后运行 `node_modules/.bin/electron.cmd tests/learning-ui-smoke.cjs`，用示例文件在静音隔离环境检查空状态、进度、点击菜单、跟随控制和预览切换；不使用真实麦克风或用户录音。
+- 运行 `node --test tests/voice-activity.test.cjs`，检查语音检测器及播放/录音生命周期。
+- 运行 `node_modules/.bin/electron.cmd tests/voice-activity-smoke.cjs`，在隐藏 Chromium 中检查合成音频；不能替代真实麦克风测试。
+- 修改设置时运行 `node --test tests/settings.test.cjs`，检查校验和存储失败处理。
+- 修改录音存储时运行 `npm run test:recordings`，检查持久化、合并、回滚和课程标识。
+- 运行 `node_modules/.bin/electron.cmd tests/recording-audio-smoke.cjs`（Windows 使用 `electron.cmd`），在隐藏 Chromium 中检查 WAV 解码与合并；不能覆盖麦克风权限或完整桌面流程。
+- 修复解析或播放问题时，条件允许应增加聚焦的回归测试，并说明运行方式。
 
-1. Open `resources/` and check matched lessons and the incomplete-lesson warning; also check folder-picker cancellation and an empty folder when touching import code.
-2. Play, pause, select sentences, navigate lessons, and verify transcript highlighting near sentence boundaries and the final sentence.
-3. Check repeat-one, volume, mute, and playback speeds below and above 1x when changing playback.
-4. Enable shadowing, allow microphone access, record a sentence, and replay it. Exercise denied access when changing recording initialization.
-5. Seek or switch lessons during recording, disable shadowing, and close/reopen the app when changing lifecycle behavior. Check for stale clips and lingering audio or microphone use.
-6. Verify shortcuts and readable transcripts when changing the interface.
+可行时手动验证受影响流程：
 
-Report what changed, which checks ran, and any failures or checks that could not be performed. Do not claim microphone or desktop behavior was verified solely from lint or a successful build. Update this guide when architecture, commands, or the learning workflow change.
+1. 涉及导入时，打开 `resources/`，检查课程配对、不完整课程警告、取消文件夹选择及空文件夹。
+2. 播放、暂停、选句和切换课程，检查句子边界及最后一句附近的字幕高亮。
+3. 涉及播放时，检查单句循环、音量、静音，以及低于和高于 1 倍速的播放。
+4. 涉及录音初始化时，开启跟读、允许麦克风、录制并回放一句，同时测试拒绝授权。
+5. 涉及生命周期时，在录音中跳转或切课、关闭跟读、关闭并重开应用，检查残留录音以及未释放的音频或麦克风。
+6. 涉及界面时，检查快捷键和字幕可读性。
+
+交付时说明改动、已运行的检查、失败项和无法执行的检查。不能仅凭 lint 或构建成功声称麦克风或桌面行为已验证。架构、命令或学习流程变化时同步更新本指南。

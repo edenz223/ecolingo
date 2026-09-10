@@ -68,16 +68,32 @@ app.whenReady().then(async () => {
           }
         }, { maxMs: 1000 });
       });
+      // A brief word must survive real analyser polling and the sentence limit.
+      gain.gain.setValueAtTime(0, audio.currentTime);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      gain.gain.setValueAtTime(0.1, audio.currentTime + 0.1);
+      gain.gain.setValueAtTime(0, audio.currentTime + 0.34);
+      const shortWord = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Short word did not finish')), 3000);
+        monitor.start((result) => {
+          if (result.reason) {
+            clearTimeout(timeout);
+            monitor.stop();
+            resolve(result.reason);
+          }
+        }, { maxMs: 700 });
+      });
       monitor.dispose(); oscillator.stop();
       destination.stream.getTracks().forEach((track) => track.stop());
       await audio.close();
-      return { ...endpoint, duration: decoded.duration, stopped: stoppedCleanly, limited };
+      return { ...endpoint, duration: decoded.duration, stopped: stoppedCleanly, limited, shortWord };
     })()`);
     assert.equal(result.reason, 'silence');
     assert.ok(result.elapsed >= 3750 && result.elapsed < 6000, JSON.stringify(result));
     assert.ok(result.duration >= 3.7, JSON.stringify(result));
     assert.equal(result.stopped, true);
     assert.equal(result.limited.reason, 'limit');
+    assert.equal(result.shortWord, 'limit');
     assert.ok(result.limited.elapsed >= 1000 && result.limited.elapsed < 2500, JSON.stringify(result));
     console.log('PASS Chromium VAD: speech, short pause, trailing silence, recorded audio decoding, timer cleanup', result);
   } catch (error) {

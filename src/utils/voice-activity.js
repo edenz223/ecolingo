@@ -1,6 +1,8 @@
 // Local energy-based endpoint detection. Times are wall-clock milliseconds.
 export function createVoiceActivityDetector(startedAt, options = {}) {
-  const { silenceMs = 1200, speechMs = 400, waitMs = 8000, maxMs = 30000 } = options;
+  // Short words can contain less than 400 ms of voiced audio. Require several
+  // observed frames, enough to reject a click without discarding a brief word.
+  const { silenceMs = 1200, speechMs = 120, waitMs = 8000, maxMs = 30000 } = options;
   let previous = startedAt;
   let lastVoice = startedAt;
   let voicedMs = 0;

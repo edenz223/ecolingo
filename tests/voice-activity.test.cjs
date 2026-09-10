@@ -7,6 +7,9 @@ const root = path.join(__dirname, '..');
 const detectorSource = fs.readFileSync(path.join(root, 'src/utils/voice-activity.js'), 'utf8');
 const detectorScope = {};
 vm.runInNewContext(detectorSource.replaceAll('export function', 'function'), detectorScope);
+const settingsScope = {};
+vm.runInNewContext(fs.readFileSync(path.join(root, 'src/utils/settings.js'), 'utf8')
+  .replaceAll('export function', 'function'), settingsScope);
 
 function signal(options) {
   let now = 0;
@@ -42,6 +45,29 @@ test('isolated clicks and steady low background noise do not count as speech', (
 
 test('continuous noise/speech has a bounded recording time', () => {
   assert.equal(signal()(0.1, 30000).reason, 'limit');
+});
+
+test('brief words count as speech at both trailing silence and a short sentence deadline', () => {
+  for (const rms of [0.012, 0.08]) {
+    const feed = signal();
+    feed(0.001, 300);
+    assert.equal(feed(rms, 180).state, 'speaking');
+    assert.equal(feed(0.001, 1200).reason, 'silence');
+
+    const short = signal({ maxMs: 300 });
+    short(0.001, 60);
+    short(rms, 180);
+    assert.equal(short(0.001, 60).reason, 'limit');
+  }
+});
+
+test('separated clicks do not accumulate into a brief word', () => {
+  const feed = signal({ maxMs: 1000 });
+  for (let i = 0; i < 3; i++) {
+    feed(0.1, 40);
+    feed(0.001, 260);
+  }
+  assert.equal(feed(0.001, 100).reason, 'no-speech');
 });
 
 test('sentence limits stop short takes and allow long takes beyond 30 seconds', () => {
@@ -92,7 +118,8 @@ function setup({ deferredAccess = false, denied = false } = {}) {
     ready: async () => {}, start(fn, options) { update = fn; this.options = options; }, stop() {}, dispose() {},
   };
   const context = {
-    ref: (value) => ({ value }), onMounted() {}, onUnmounted() {},
+    ref: require('vue').shallowRef, watch: require('vue').watch, onMounted() {}, onUnmounted() {},
+    loadSettings: settingsScope.loadSettings, saveSettings: settingsScope.saveSettings,
     createVoiceMonitor: () => monitor,
     navigator: { mediaDevices: { getUserMedia: () => denied
       ? Promise.reject(new Error('Permission denied')) : deferredAccess

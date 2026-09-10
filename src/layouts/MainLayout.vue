@@ -199,21 +199,24 @@
   </q-layout>
 </template>
 <script setup>
-import { onMounted, ref, onUnmounted } from "vue";
+import { onMounted, ref, onUnmounted, watch } from "vue";
 import { parseLRC } from "../utils/lyrics-util";
 import { Howl } from "howler";
 import { mergeRecordings } from '../utils/recording-export';
 import { createVoiceMonitor } from '../utils/voice-activity';
+import { loadSettings, saveSettings } from '../utils/settings';
 
-const rightDrawerOpen = ref(true);
+const settings = loadSettings();
+const rightDrawerOpen = ref(settings.drawerOpen);
 const lessons = ref([]);
 const currentLessonIndex = ref(-1);
-const volume = ref(100);
+const volume = ref(settings.volume);
+const muted = ref(settings.muted);
 const volumeSliderVisible = ref(false);
 const followSentence = ref(true);
 const lessonLoading = ref(false);
 
-const shadowingMode = ref(false);
+const shadowingMode = ref(settings.shadowing);
 const recordings = ref({});
 const isRecording = ref(false);
 const currentRecordingSentence = ref(null);
@@ -256,7 +259,7 @@ const recordingHistory = ref([]);
 
 // Add these new refs and constants
 const playbackRateMenuVisible = ref(false);
-const currentPlaybackRate = ref(1);
+const currentPlaybackRate = ref(settings.playbackRate);
 const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 
 function pauseFollowing() {
@@ -312,7 +315,8 @@ function handleKeyDown(event) {
   }
   // Key M to toggle mute
   if (event.code === 'KeyM' && !event.target.closest('input, textarea')) {
-    player.sound.value?.mute(!player.sound.value.mute());
+    muted.value = !muted.value;
+    player.sound.value?.mute(muted.value);
   }
   // Control + KeyR to reload the page
   if (event.code === 'KeyR' && event.ctrlKey) {
@@ -350,10 +354,10 @@ class Player {
     this.parsedSentences = ref([]);
     this.isScrolling = ref(false);
     this.currentPause = null;
-    this.repeatOne = ref(false);
-    this.volume = ref(100);
+    this.repeatOne = ref(settings.repeatOne);
+    this.volume = volume;
     this.isShadowing = ref(false);
-    this.playbackRate = ref(1);
+    this.playbackRate = currentPlaybackRate;
   }
 
   async playLesson(lesson) {
@@ -417,6 +421,7 @@ class Player {
         html5: true,
         format: ["mp3", "wav", "ogg", "aac", "flac", "m4a"],
         volume: this.volume.value / 100,
+        mute: muted.value,
         rate: this.playbackRate.value,
         onload: () => {
           if (sessionId !== this.loadSessionId) return;
@@ -604,6 +609,11 @@ class Player {
 
 const player = new Player();
 
+watch([volume, muted, currentPlaybackRate, shadowingMode, player.repeatOne, rightDrawerOpen],
+  ([volume, muted, playbackRate, shadowing, repeatOne, drawerOpen]) => {
+    saveSettings({ volume, muted, playbackRate, shadowing, repeatOne, drawerOpen });
+  }, { flush: 'sync' });
+
 function playLesson(index) {
   if (index >= 0 && index < lessons.value.length) {
     currentLessonIndex.value = index;
@@ -744,8 +754,9 @@ async function toggleShadowingMode() {
 }
 
 function setPlaybackRate(rate) {
-  currentPlaybackRate.value = rate;
-  player.setPlaybackRate(Number(rate));
+  const value = Number(rate);
+  if (!Number.isFinite(value)) return;
+  player.setPlaybackRate(Math.min(4, Math.max(0.1, value)));
 }
 
 async function ensureRecorderAccess() {

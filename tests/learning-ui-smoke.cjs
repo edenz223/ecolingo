@@ -70,6 +70,22 @@ app.whenReady().then(async () => {
     await waitFor(`Boolean(document.querySelector('.sentence-item')) && !document.querySelector('.q-dialog')`);
     const screenshot = path.join(temp, 'learning-ui.png');
     fs.writeFileSync(screenshot, (await win.webContents.capturePage()).toPNG());
+    await evaluate(`document.querySelector('[aria-label="开启单句循环"]').click();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', bubbles: true }));`);
+    const saved = JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`));
+    assert.equal(saved.playbackRate, 1.25);
+    assert.equal(saved.repeatOne, true);
+    assert.equal(saved.muted, true);
+    await win.loadFile(path.join(root, 'dist/electron/UnPackaged/index.html'));
+    await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
+    assert.ok(await evaluate(`document.querySelector('[aria-label="播放速度"]').textContent.includes('1.25')`));
+    assert.ok(await evaluate(`Boolean(document.querySelector('[aria-label="关闭单句循环"]'))`));
+    await evaluate(`document.querySelector('.lesson-item').click()`);
+    await waitFor(`Boolean(document.querySelector('.sentence-item'))`);
+    await evaluate(`document.querySelector('[aria-label="暂停"]').click();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', bubbles: true }));`);
+    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).muted, false);
+    console.log('PASS settings survive reload: playback speed, repeat one, mute');
     console.log('PASS learning UI: empty state, course progress, click menus, follow control, preview toggle');
     console.log('Screenshot: ' + screenshot);
   } catch (error) {

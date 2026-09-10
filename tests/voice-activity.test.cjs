@@ -93,6 +93,7 @@ function setup({ deferredAccess = false, denied = false } = {}) {
   let update;
   let readPreview;
   let scrolls = 0;
+  const scheduledDelays = [];
   const previews = [];
   const saves = [];
   const tracks = [{ stop() { this.stopped = true; } }];
@@ -136,7 +137,15 @@ function setup({ deferredAccess = false, denied = false } = {}) {
       load() {}
     },
     MediaRecorder: Recorder, Blob, performance, console,
-    setTimeout, clearTimeout, URL,
+    setTimeout(callback, delay) {
+      scheduledDelays.push(delay);
+      if (delay === 500) {
+        queueMicrotask(callback);
+        return -1;
+      }
+      return setTimeout(callback, delay);
+    },
+    clearTimeout, URL,
     document: { getElementById: () => ({ scrollIntoView() { scrolls++; } }) },
   };
   vm.createContext(context);
@@ -161,7 +170,7 @@ function setup({ deferredAccess = false, denied = false } = {}) {
   h.player.currentSentence.value = sentences[0];
   h.player.parsedSentences.value = sentences;
   h.shadowingMode.value = true;
-  return { ...h, sound, sentences, saves, tracks, monitor,
+  return { ...h, sound, sentences, saves, tracks, monitor, scheduledDelays,
     previews, scrollCount: () => scrolls,
     finishRead: () => readPreview({ bytes: new Uint8Array([1]), mime: 'audio/webm' }),
     emit: (reason) => update({ state: 'silence', reason }),
@@ -224,13 +233,14 @@ test('preview toggles off during loading and playback, and clears after ending',
   } finally { h.cleanup(); }
 });
 
-test('recording deadline is twice sentence playback duration at the selected speed', async () => {
+test('recording deadline is always ten seconds', async () => {
   for (const rate of [0.5, 1, 2]) {
     const h = setup();
     try {
       h.currentPlaybackRate.value = rate;
       h.player.step(); await flush();
-      assert.equal(h.monitor.options.maxMs, 2000 / rate);
+      assert.ok(h.scheduledDelays.includes(500));
+      assert.equal(h.monitor.options.maxMs, 10000);
       h.emit('limit');
       assert.equal(h.sound.playing(), false);
       await flush();

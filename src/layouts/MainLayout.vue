@@ -107,13 +107,6 @@
                 <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
               </q-item-section>
               <q-item-section side class="sentence-actions">
-                <div v-if="currentRecordingSentence === s.start || noSpeechSentence === s.start" class="sentence-recording">
-                  <div class="recording-indicator" role="img" :aria-label="noSpeechSentence === s.start ? '未检测到声音，已暂停' : '正在录音'">
-                    <span class="recording-mic" :class="{ 'recording-mic--active': recordingVoiceActive && noSpeechSentence !== s.start, 'recording-mic--silent': noSpeechSentence === s.start }" aria-hidden="true">
-                      <q-icon :name="noSpeechSentence === s.start ? 'mic_off' : 'mic'" size="18px" />
-                    </span>
-                  </div>
-                </div>
                 <q-btn v-if="recordings[s.start] && !isRecording && noSpeechSentence !== s.start" round dense flat
                   :icon="previewClipId === recordings[s.start].id ? 'stop_circle' : 'play_circle'"
                   :color="previewClipId === recordings[s.start].id ? 'primary' : undefined"
@@ -129,6 +122,27 @@
     </q-page-container>
 
     <q-footer elevated class="bg-grey-8 text-white">
+      <Transition name="recording-float">
+      <div v-if="isRecording || noSpeechSentence !== null" class="floating-recording" role="status"
+        aria-live="polite" aria-atomic="true">
+        <span class="recording-mic recording-mic--floating"
+          :class="{
+            'recording-mic--active': recordingVoiceActive && noSpeechSentence === null,
+            'recording-mic--silent': noSpeechSentence !== null,
+          }" aria-hidden="true">
+          <q-icon :name="noSpeechSentence !== null ? 'mic_off' : 'mic'" size="26px" />
+          <span v-if="recordingVoiceActive || noSpeechSentence !== null"
+            :key="noSpeechSentence !== null ? 'silent' : 'voice'" class="recording-particles">
+            <span v-for="particle in 8" :key="particle" class="recording-particle"
+              :style="{
+                '--particle-angle': `${particle * 45}deg`,
+                '--particle-delay': `${(particle % 4) * 90}ms`,
+              }" />
+          </span>
+        </span>
+        <span class="sr-only">{{ noSpeechSentence !== null ? '未检测到声音，已暂停' : '正在录音' }}</span>
+      </div>
+      </Transition>
       <q-toolbar class="wrap playback-toolbar">
         <div class="sentence-navigation">
         <q-btn flat round icon="skip_previous" aria-label="上一句" :disable="!player.currentSentence.value" @click="beforeSentence">
@@ -200,7 +214,7 @@
 </template>
 <script setup>
 import { onMounted, ref, onUnmounted, watch } from "vue";
-import { parseLRC } from "../utils/lyrics-util";
+import { parseLRC, parseSRT } from '../utils/lyrics-util';
 import { Howl } from "howler";
 import { mergeRecordings } from '../utils/recording-export';
 import { createVoiceMonitor } from '../utils/voice-activity';
@@ -219,7 +233,6 @@ const lessonLoading = ref(false);
 const shadowingMode = ref(settings.shadowing);
 const recordings = ref({});
 const isRecording = ref(false);
-const currentRecordingSentence = ref(null);
 const recordingError = ref("");
 let noSpeechNoticeTimer = null;
 const noSpeechSentence = ref(null);
@@ -697,28 +710,6 @@ function next() {
   playLesson(currentLessonIndex.value);
 }
 
-function parseSRT(content) {
-  const lines = content.trim().split(/\r?\n\r?\n/);
-  return lines.map((block) => {
-    const [id, time, ...textLines] = block.split(/\r?\n/);
-    const [startTime, endTime] = time.split(" --> ").map(timeToSeconds);
-    return {
-      start: startTime,
-      end: endTime,
-      text: textLines.join(" "),
-    };
-  });
-}
-
-function timeToSeconds(timeString) {
-  const [hours, minutes, seconds] = timeString.split(":");
-  return (
-    parseFloat(hours) * 3600 +
-    parseFloat(minutes) * 60 +
-    parseFloat(seconds.replace(",", "."))
-  );
-}
-
 function openFolder() {
   window.fileAPI.openFolder();
 }
@@ -829,22 +820,20 @@ function startSentenceRecording(sentence) {
   }
 
   const sessionId = player.loadSessionId;
-  const maxMs = ((sentence.end - sentence.start) / Number(currentPlaybackRate.value)) * 2000;
-  if (!Number.isFinite(maxMs) || maxMs <= 0) {
-    player.stopCurrentPlayback();
-    recordingError.value = '当前句子的时长无效，无法开始录音。请检查字幕时间。';
-    return;
-  }
+  const maxMs = 10000;
   const attempt = ++recordingAttempt;
   recordingStatus.value = '正在准备麦克风…';
-  ensureRecorderAccess().then((ready) => {
+  ensureRecorderAccess().then(async (ready) => {
     if (attempt !== recordingAttempt) return;
     if (!ready) {
       player.stopCurrentPlayback();
       player.sound.value?.seek(sentence.start);
       return;
     }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
     if (
+      attempt !== recordingAttempt ||
       !mediaRecorder ||
       shadowingMode.value === false ||
       !player.isShadowing.value ||
@@ -876,7 +865,6 @@ function startSentenceRecording(sentence) {
 
     isRecording.value = true;
     recordingChunks = [];
-    currentRecordingSentence.value = sentence.start;
     mediaRecorder.start();
     recordingStartedAt = performance.now();
     recordingError.value = '';
@@ -907,7 +895,7 @@ function finishShadowing(reason = 'manual') {
     return;
   }
   completedShadow = { sessionId: player.loadSessionId, sentence: player.currentSentence.value };
-  recordingStatus.value = reason === 'limit' ? '已达到本句播放时长的两倍，正在保存…' : '正在完成录音…';
+  recordingStatus.value = reason === 'limit' ? '已达到 10 秒录音上限，正在保存…' : '正在完成录音…';
   stopSentenceRecording();
 }
 
@@ -1055,7 +1043,6 @@ function resetRecordingState() {
   recordingVoiceActive.value = false;
   recordingStatus.value = '';
   isRecording.value = false;
-  currentRecordingSentence.value = null;
   pendingRecordingSentence = null;
   recordingChunks = [];
   discardNextRecording = false;
@@ -1243,19 +1230,45 @@ function releaseRecordingResources() {
   gap: 6px;
 }
 
-.recording-indicator {
+.floating-recording {
+  position: absolute;
+  top: -82px;
+  left: 50%;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 16px rgba(35, 49, 65, 0.10), 0 12px 32px rgba(35, 49, 65, 0.06);
+  pointer-events: none;
+  transform: translateX(-50%);
 }
 
-.sentence-recording {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 4px;
-  white-space: normal;
+.recording-float-enter-active,
+.recording-float-leave-active {
+  transition: opacity 200ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.recording-float-enter-from,
+.recording-float-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 6px) scale(0.92);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .recording-mic {
@@ -1266,47 +1279,109 @@ function releaseRecordingResources() {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  color: #d32f2f;
-  background: #ffebee;
+  color: #d45360;
+  background: #fff0f1;
+  transition: color 240ms ease, background-color 240ms ease;
+}
+
+.recording-mic--floating {
+  width: 46px;
+  height: 46px;
+}
+
+.recording-mic::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+  opacity: 0.12;
+  animation: recording-breathe 2.4s ease-in-out infinite;
+}
+
+.recording-mic > .q-icon {
+  z-index: 1;
 }
 
 .recording-mic--active {
-  color: #2e7d32;
-  background: #e8f5e9;
+  color: #229b72;
+  background: #eaf8f1;
 }
 
-.recording-mic--active::after {
-  content: '';
+.recording-mic--active::before {
+  animation: recording-ripple 1.8s ease-out infinite;
+}
+
+.recording-particles {
   position: absolute;
   inset: 0;
-  border: 2px solid #43a047;
-  border-radius: 50%;
-  animation: recording-pulse 900ms ease-out infinite;
+  color: inherit;
+  pointer-events: none;
 }
 
-@keyframes recording-pulse {
-  from { transform: scale(1); opacity: 0.9; }
-  to { transform: scale(1.45); opacity: 0; }
+.recording-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  animation: recording-particle-diffuse 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation-delay: var(--particle-delay);
 }
 
 .recording-mic--silent {
-  color: #9a6700;
-  background: #fff3cd;
+  color: #b88429;
+  background: #fff5e3;
 }
 
-.recording-mic--silent::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2px solid #d49b00;
-  border-radius: 50%;
-  animation: recording-pulse 500ms ease-out 2;
+.recording-mic--silent::before {
+  animation: recording-ripple 900ms ease-out both;
+}
+
+.recording-mic--silent .recording-particle {
+  animation-duration: 720ms;
+  animation-delay: 0ms;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
+@keyframes recording-breathe {
+  0%, 100% { opacity: 0.10; transform: scale(1); }
+  50% { opacity: 0.24; transform: scale(1.06); }
+}
+
+@keyframes recording-ripple {
+  0% { opacity: 0.26; transform: scale(0.96); }
+  100% { opacity: 0; transform: scale(1.48); }
+}
+
+@keyframes recording-particle-diffuse {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--particle-angle)) translateY(-25px) scale(0.65);
+  }
+  20% {
+    opacity: 0.48;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--particle-angle)) translateY(-41px) scale(0.2);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .recording-mic--active::after,
-  .recording-mic--silent::after {
+  .recording-particle,
+  .recording-mic::before {
     animation: none;
+  }
+
+  .recording-mic,
+  .recording-float-enter-active,
+  .recording-float-leave-active {
+    transition: none;
   }
 }
 

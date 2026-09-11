@@ -20,7 +20,7 @@ fs.writeFileSync(preload, `
     onFolderSelected(fn) { selected = fn; },
     openFolder() { selected({}, [lesson]); },
     recordingIdentity: async () => 'fixture',
-    listRecordings: async () => [{ id: 'fixture-take', start: 0, text: 'Fixture', lessonName: lesson.name, createdAt: Date.now() }],
+    listRecordings: async () => [{ id: 'fixture-take', start: 6.39, text: 'Fixture', lessonName: lesson.name, createdAt: Date.now() }],
     readTextFile: async (file) => fs.readFileSync(file, 'utf8'),
     readRecording: async () => ({ bytes: fs.readFileSync(folder + '/002 02.mp3'), mime: 'audio/mpeg' }),
   });
@@ -59,13 +59,12 @@ app.whenReady().then(async () => {
     await waitFor(`document.querySelector('.lesson-progress').textContent.includes('回到当前句')`);
     await evaluate(`document.querySelector('.lesson-progress button').click()`);
     await waitFor(`!document.querySelector('.lesson-progress').textContent.includes('回到当前句')`);
-    await evaluate(`Array.from(document.querySelectorAll('button')).find(el => el.textContent.includes('录音记录')).click()`);
-    await waitFor(`Boolean(document.querySelector('[aria-label="播放录音"]'))`);
-    await evaluate(`document.querySelector('[aria-label="播放录音"]').click()`);
+    assert.equal(await evaluate(`document.querySelector('.q-toolbar').textContent.includes('录音记录') || document.querySelector('.q-toolbar').textContent.includes('更多')`), false);
+    await waitFor(`Boolean(document.querySelector('[aria-label="播放此句最新录音"]'))`);
+    await evaluate(`document.querySelector('[aria-label="播放此句最新录音"]').click()`);
     await waitFor(`Boolean(document.querySelector('[aria-label="停止回放"]'))`);
     await evaluate(`document.querySelector('[aria-label="停止回放"]').click()`);
-    await waitFor(`Boolean(document.querySelector('[aria-label="播放录音"]'))`);
-    await evaluate(`Array.from(document.querySelectorAll('.q-dialog button')).find(el => el.textContent.includes('关闭')).click()`);
+    await waitFor(`Boolean(document.querySelector('[aria-label="播放此句最新录音"]'))`);
     await new Promise((resolve) => setTimeout(resolve, 350));
     await waitFor(`Boolean(document.querySelector('.sentence-item')) && !document.querySelector('.q-dialog')`);
     const screenshot = path.join(temp, 'learning-ui.png');

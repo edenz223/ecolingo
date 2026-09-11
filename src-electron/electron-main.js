@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu } from "electron";
 import path from "path";
 import os from "os";
 import { FileProcessor } from "./fileSystem";
-import { RecordingStore, lessonIdentity, atomicWrite } from './recording-store.cjs';
+import { RecordingStore, lessonIdentity } from './recording-store.cjs';
 
 const fileProcessor = new FileProcessor();
 
@@ -61,37 +61,6 @@ ipcMain.handle('recordings:identity', (event, lesson) => lessonIdentity(lesson))
 ipcMain.handle('recordings:list', async (event, lessonId) => (await getRecordingStore()).list(lessonId));
 ipcMain.handle('recordings:save', async (event, meta, bytes) => (await getRecordingStore()).save(meta, bytes));
 ipcMain.handle('recordings:read', async (event, id) => (await getRecordingStore()).read(id));
-ipcMain.handle('recordings:export-wav', async (event, data) => {
-  const bytes = Buffer.from(data);
-  if (bytes.length < 44 || bytes.length > 90 * 1024 * 1024 ||
-      bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE') {
-    throw new Error('Invalid WAV audio.');
-  }
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: '导出本课合并录音', defaultPath: 'ecolingo-merged.wav',
-    filters: [{ name: 'WAV audio', extensions: ['wav'] }],
-  });
-  if (result.canceled || !result.filePath) return null;
-  atomicWrite(result.filePath, bytes);
-  return result.filePath;
-});
-ipcMain.handle('recordings:export', async () => {
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: '导出全部录音备份', defaultPath: `ecolingo-recordings-${new Date().toISOString().slice(0, 10)}.zip`,
-    filters: [{ name: 'EcoLingo recording backup', extensions: ['zip'] }],
-  });
-  if (result.canceled || !result.filePath) return null;
-  return (await getRecordingStore()).exportBackup(result.filePath);
-});
-ipcMain.handle('recordings:restore', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: '合并恢复录音备份', properties: ['openFile'],
-    filters: [{ name: 'EcoLingo recording backup', extensions: ['zip'] }],
-  });
-  if (result.canceled || !result.filePaths.length) return null;
-  return (await getRecordingStore()).restoreBackup(result.filePaths[0]);
-});
-
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
 

@@ -4,25 +4,6 @@
       <q-toolbar class="wrap">
         <q-toolbar-title> Ecolingo </q-toolbar-title>
         <q-btn flat label="打开课程" icon="folder_open" @click="openFolder" />
-        <q-btn flat label="录音记录" icon="library_music" @click="showRecordingHistory" :disable="storageBusy" />
-        <q-btn flat label="更多" icon="more_horiz" :disable="storageBusy">
-          <q-menu>
-            <q-list style="min-width: 180px">
-              <q-item clickable v-close-popup @click="exportRecordings">
-                <q-item-section avatar><q-icon name="archive" /></q-item-section>
-                <q-item-section>导出录音备份</q-item-section>
-              </q-item>
-              <q-item clickable v-close-popup @click="exportMergedRecording" :disable="!Object.keys(recordings).length">
-                <q-item-section avatar><q-icon name="audio_file" /></q-item-section>
-                <q-item-section>导出本课合并音频</q-item-section>
-              </q-item>
-              <q-item clickable v-close-popup @click="restoreRecordings">
-                <q-item-section avatar><q-icon name="restore" /></q-item-section>
-                <q-item-section>恢复录音备份</q-item-section>
-              </q-item>
-            </q-list>
-          </q-menu>
-        </q-btn>
       </q-toolbar>
     </q-header>
 
@@ -36,33 +17,6 @@
         <q-card-actions align="right">
           <q-btn flat color="primary" label="关闭" autofocus @click="closeRecordingError" />
         </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <q-dialog v-model="historyOpen" @hide="stopPreview">
-      <q-card style="width: 720px; max-width: 90vw">
-        <q-card-section class="text-h6">全部录音记录</q-card-section>
-        <q-card-section class="q-pt-none">
-          每次录音均保存在本地。备份包含全部录音和 SQLite 索引，恢复时合并并去重。
-          原课程音频和字幕需另行保存；重新打开相同内容的课程即可关联录音。
-        </q-card-section>
-        <q-card-section style="max-height: 55vh" class="scroll">
-          <div v-if="!recordingHistory.length">暂无录音</div>
-          <q-list separator>
-            <q-item v-for="clip in recordingHistory" :key="clip.id" :class="{ 'sentence-preview': previewClipId === clip.id }">
-              <q-item-section>
-                <q-item-label>{{ clip.lessonName }} · {{ clip.start.toFixed(2) }}s</q-item-label>
-                <q-item-label>{{ clip.text }}</q-item-label>
-                <q-item-label caption>{{ new Date(clip.createdAt).toLocaleString() }}</q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-btn round flat :icon="previewClipId === clip.id ? 'stop_circle' : 'play_circle'"
-                  :aria-label="previewClipId === clip.id ? '停止回放' : '播放录音'" @click="previewRecording(clip)" />
-              </q-item-section>
-            </q-item>
-          </q-list>
-        </q-card-section>
-        <q-card-actions align="right"><q-btn flat label="关闭" v-close-popup /></q-card-actions>
       </q-card>
     </q-dialog>
 
@@ -85,7 +39,6 @@
 
     <q-page-container>
       <q-page padding>
-        <q-banner v-if="storageMessage" class="bg-blue-1 q-mb-md">{{ storageMessage }}</q-banner>
         <div v-if="!player.parsedSentences.value.length" class="lesson-empty">
           <q-icon name="headphones" size="48px" color="primary" />
           <div class="text-h6">{{ lessonLoading ? '正在打开课程…' : '开始今天的跟读' }}</div>
@@ -250,7 +203,6 @@
 import { onMounted, ref, onUnmounted, watch } from "vue";
 import { parseLRC, parseSRT } from '../utils/lyrics-util';
 import { Howl } from "howler";
-import { mergeRecordings } from '../utils/recording-export';
 import { createVoiceMonitor } from '../utils/voice-activity';
 import { createZenCompletion } from '../utils/zen-flow';
 import { loadSettings, saveSettings } from '../utils/settings';
@@ -340,6 +292,7 @@ const completeZenRecording = createZenCompletion({
   },
   stop: () => player.stopCurrentPlayback(),
 });
+const pendingSaves = new Set();
 const recordings = ref({});
 const isRecording = ref(false);
 const recordingError = ref("");
@@ -373,11 +326,6 @@ let previewSession = 0;
 const previewClipId = ref(null);
 let activeLessonId = null;
 let microphoneSession = 0;
-const pendingSaves = new Set();
-const storageBusy = ref(false);
-const storageMessage = ref('');
-const historyOpen = ref(false);
-const recordingHistory = ref([]);
 
 // Add these new refs and constants
 const playbackRateMenuVisible = ref(false);
@@ -398,7 +346,7 @@ function handleScrollPointer(event) {
 }
 
 function handleKeyDown(event) {
-  if (recordingError.value || historyOpen.value || storageBusy.value || event.target.closest('input, textarea, select, button, [role="switch"], [role="slider"], [contenteditable="true"]') || event.altKey || event.metaKey) return;
+  if (recordingError.value || event.target.closest('input, textarea, select, button, [role="switch"], [role="slider"], [contenteditable="true"]') || event.altKey || event.metaKey) return;
   if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.code)) pauseFollowing();
   if (!player.sound.value && !['KeyQ', 'KeyE', 'KeyR'].includes(event.code)) return;
   if (event.ctrlKey && event.code !== 'KeyR') return;
@@ -1115,56 +1063,6 @@ async function refreshRecordings(lessonId = activeLessonId, sessionId = player.l
     if (!latest[clip.start]) latest[clip.start] = clip;
   }
   recordings.value = latest;
-}
-
-async function withStorageAction(action) {
-  if (storageBusy.value) return;
-  storageBusy.value = true;
-  storageMessage.value = '';
-  player.stopCurrentPlayback();
-  stopPreview();
-  try {
-    await Promise.all([...pendingSaves]);
-    await action();
-  } catch (error) {
-    recordingError.value = `录音操作失败：${error.message}`;
-  } finally {
-    storageBusy.value = false;
-  }
-}
-
-function showRecordingHistory() {
-  return withStorageAction(async () => {
-    recordingHistory.value = await window.fileAPI.listRecordings();
-    historyOpen.value = true;
-  });
-}
-
-function exportRecordings() {
-  return withStorageAction(async () => {
-    const result = await window.fileAPI.exportRecordings();
-    if (result) storageMessage.value = `已导出 ${result.count} 条录音：${result.path}`;
-  });
-}
-
-function exportMergedRecording() {
-  return withStorageAction(async () => {
-    const clips = Object.values(recordings.value).sort((a, b) => a.start - b.start);
-    if (!clips.length) return;
-    storageMessage.value = '正在按句子顺序合并本课每句最新录音…';
-    const bytes = await mergeRecordings(clips, (id) => window.fileAPI.readRecording(id));
-    const destination = await window.fileAPI.exportMergedRecording(bytes);
-    storageMessage.value = destination ? `已合并 ${clips.length} 句：${destination}。如需恢复记录，请使用“导出备份”。` : '';
-  });
-}
-
-function restoreRecordings() {
-  return withStorageAction(async () => {
-    const result = await window.fileAPI.restoreRecordings();
-    if (!result) return;
-    await refreshRecordings();
-    storageMessage.value = `恢复完成：新增 ${result.added} 条，已存在 ${result.skipped} 条。`;
-  });
 }
 
 function resetRecordingState() {

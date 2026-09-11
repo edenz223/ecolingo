@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.16.4",
-    "adm-zip": "^0.6.0",
     "howler": "^2.2.4",
     "jschardet": "^3.0.0",
     "quasar": "^2.8.0",

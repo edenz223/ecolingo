@@ -5,13 +5,16 @@ const defaults = {
   shadowing: false,
   repeatOne: false,
   drawerOpen: true,
+  zenFirstAttempt: true,
+  practiceMethod: 'listen',
 };
 const storageKey = 'ecolingo.settings.v1';
 
 function normalizeSettings(value) {
   const settings = { ...defaults };
   if (!value || typeof value !== 'object') return settings;
-  for (const key of ['muted', 'shadowing', 'repeatOne', 'drawerOpen']) {
+  if (['listen', 'replay', 'attempt'].includes(value.practiceMethod)) settings.practiceMethod = value.practiceMethod;
+  for (const key of ['muted', 'shadowing', 'repeatOne', 'drawerOpen', 'zenFirstAttempt']) {
     if (typeof value[key] === 'boolean') settings[key] = value[key];
   }
   if (Number.isFinite(value.volume) && value.volume >= 0 && value.volume <= 100) {

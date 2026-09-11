@@ -1,6 +1,6 @@
 <template>
   <q-layout view="hHh lpR fFf" class="bg-grey-1">
-    <q-header elevated class="bg-primary text-white">
+    <q-header v-if="!focusMode" elevated class="bg-primary text-white">
       <q-toolbar class="wrap">
         <q-toolbar-title> Ecolingo </q-toolbar-title>
         <q-btn flat label="打开课程" icon="folder_open" @click="openFolder" />
@@ -66,7 +66,7 @@
       </q-card>
     </q-dialog>
 
-    <q-drawer v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
+    <q-drawer v-if="!focusMode" v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
       <q-scroll-area class="fit">
         <q-list>
           <q-item-label header>课程列表</q-item-label>
@@ -92,12 +92,19 @@
           <div class="text-grey-7">选择包含音频和字幕的文件夹</div>
           <q-btn unelevated color="primary" icon="folder_open" label="打开课程文件夹" :loading="lessonLoading" @click="openFolder" />
         </div>
-        <div v-else class="lesson-progress">
+        <div v-else-if="!focusMode" class="lesson-progress">
           <div class="ellipsis">{{ lessons[currentLessonIndex]?.name || player.currentLesson?.name }}</div>
           <span class="text-grey-7">第 {{ Math.max(1, player.parsedSentences.value.indexOf(player.currentSentence.value) + 1) }} / {{ player.parsedSentences.value.length }} 句</span>
           <q-btn v-if="!followSentence" flat dense color="primary" icon="my_location" label="回到当前句" @click="resumeFollowing" />
         </div>
-        <div id="sentences" class="q-pa-md" @wheel.passive="pauseFollowing" @touchmove.passive="pauseFollowing">
+        <div v-if="focusMode" class="zen-stage">
+          <div class="zen-neighbor" aria-hidden="true">{{ zenNeighbor(-1) }}</div>
+          <Transition name="zen-sentence" mode="out-in">
+            <div :key="player.currentSentence.value?.start" class="zen-current">{{ player.currentSentence.value?.text }}</div>
+          </Transition>
+          <div class="zen-neighbor" aria-hidden="true">{{ zenNeighbor(1) }}</div>
+        </div>
+        <div v-else id="sentences" class="q-pa-md" @wheel.passive="pauseFollowing" @touchmove.passive="pauseFollowing">
           <q-list separator>
             <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
               class="sentence-item" active-class="sentence-item--active"
@@ -129,6 +136,7 @@
           :class="{
             'recording-mic--active': recordingVoiceActive && noSpeechSentence === null,
             'recording-mic--silent': noSpeechSentence !== null,
+            'recording-mic--first': zenMode && zenPhase === 'first' && noSpeechSentence === null,
           }" aria-hidden="true">
           <q-icon :name="noSpeechSentence !== null ? 'mic_off' : 'mic'" size="26px" />
           <span v-if="recordingVoiceActive || noSpeechSentence !== null"
@@ -140,9 +148,13 @@
               }" />
           </span>
         </span>
-        <span class="sr-only">{{ noSpeechSentence !== null ? '未检测到声音，已暂停' : '正在录音' }}</span>
+        <span class="sr-only">{{ noSpeechSentence !== null ? '未检测到声音，已暂停' : zenMode && zenPhase === 'first' ? '首次尝试，录音不保存' : '正在录音' }}</span>
       </div>
       </Transition>
+      <div v-if="zenPhase === 'reference' || zenPhase === 'preview'" class="floating-phase"
+        role="status" :aria-label="zenPhase === 'reference' ? '正在播放原声' : '正在回听自己的录音'">
+        <q-icon :name="zenPhase === 'reference' ? 'headphones' : 'record_voice_over'" size="24px" />
+      </div>
       <q-toolbar class="wrap playback-toolbar">
         <div class="sentence-navigation">
         <q-btn flat round icon="skip_previous" aria-label="上一句" :disable="!player.currentSentence.value" @click="beforeSentence">
@@ -165,9 +177,8 @@
         </q-btn>
         </div>
 
-        <q-space />
+        <div class="practice-controls">
 
-        <template v-if="!shadowingMode">
           <q-btn flat dense icon="volume_up" class="volume-control" aria-label="音量" :disable="!player.sound.value">
             <q-tooltip>音量 · M 静音</q-tooltip>
             <q-menu v-model="volumeSliderVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
@@ -176,13 +187,35 @@
                 style="height: 80px" />
             </q-menu>
           </q-btn>
-        </template>
           <q-toggle :model-value="shadowingMode" label="跟读" color="light-blue-4"
             :disable="!player.sound.value" @update:model-value="toggleShadowingMode">
             <q-tooltip class="small-tooltip">
               {{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S
             </q-tooltip>
           </q-toggle>
+          <q-btn v-if="shadowingMode" flat no-caps :label="'练习方式：' + practiceMethods.find(method => method.id === practiceMethod).label"
+            icon-right="expand_more" aria-label="选择练习方式">
+            <q-menu anchor="top right" self="bottom right">
+              <q-list class="practice-menu">
+                <q-item-label header>选择接下来的练习流程</q-item-label>
+                <q-item v-for="method in practiceMethods" :key="method.id" clickable v-close-popup
+                  :active="practiceMethod === method.id" @click="selectPracticeMethod(method.id)">
+                  <q-item-section>
+                    <q-item-label>{{ method.label }}</q-item-label>
+                    <q-item-label caption>{{ method.flow }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section side><q-icon v-if="practiceMethod === method.id" name="check" /></q-item-section>
+                </q-item>
+                <q-item-label caption class="q-pa-md">首次尝试不保存，正式跟读自动保存在本地。选择方式后按播放开始。</q-item-label>
+              </q-list>
+            </q-menu>
+          </q-btn>
+        </div>
+        <div class="playback-options">
+        <q-btn flat round :icon="focusMode ? 'fullscreen_exit' : 'fullscreen'" :aria-label="focusMode ? '退出专注显示' : '专注显示'"
+          :aria-pressed="focusMode" :disable="!player.currentSentence.value" @click="toggleFocusMode">
+          <q-tooltip>{{ focusMode ? '退出专注显示' : '专注显示' }}</q-tooltip>
+        </q-btn>
         <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
           :color="player.repeatOne.value ? 'light-blue-4' : undefined" :disable="!player.sound.value"
           :aria-label="player.repeatOne.value ? '关闭单句循环' : '开启单句循环'" :aria-pressed="player.repeatOne.value"
@@ -204,10 +237,11 @@
             </q-list>
           </q-menu>
           </q-btn>
-        <q-btn flat dense icon="queue_music" label="课程" aria-label="显示或隐藏课程列表"
+        <q-btn v-if="!focusMode" flat dense icon="queue_music" label="课程" aria-label="显示或隐藏课程列表"
           :aria-expanded="rightDrawerOpen" @click="rightDrawerOpen = !rightDrawerOpen">
           <q-tooltip class="small-tooltip">课程列表 · Q / E 切换课程</q-tooltip>
         </q-btn>
+        </div>
       </q-toolbar>
     </q-footer>
   </q-layout>
@@ -218,6 +252,7 @@ import { parseLRC, parseSRT } from '../utils/lyrics-util';
 import { Howl } from "howler";
 import { mergeRecordings } from '../utils/recording-export';
 import { createVoiceMonitor } from '../utils/voice-activity';
+import { createZenCompletion } from '../utils/zen-flow';
 import { loadSettings, saveSettings } from '../utils/settings';
 
 const settings = loadSettings();
@@ -231,6 +266,80 @@ const followSentence = ref(true);
 const lessonLoading = ref(false);
 
 const shadowingMode = ref(settings.shadowing);
+const zenMode = ref(settings.shadowing && settings.practiceMethod !== 'listen');
+const focusMode = ref(false);
+const practiceMethod = ref(settings.practiceMethod);
+const practiceMethods = [
+  { id: 'listen', label: '先听后读', flow: '听原声 → 跟读' },
+  { id: 'replay', label: '听读回听', flow: '听原声 → 跟读 → 听自己' },
+  { id: 'attempt', label: '先读再听', flow: '先尝试 → 听原声 → 再跟读 → 听自己' },
+];
+
+function selectPracticeMethod(method) {
+  if (!shadowingMode.value || !player.sound.value || !practiceMethods.some(item => item.id === method)) return;
+  player.stopCurrentPlayback();
+  releaseRecordingResources();
+  volumeSliderVisible.value = false;
+  playbackRateMenuVisible.value = false;
+  player.sound.value.seek(player.currentSentence.value.start);
+  practiceMethod.value = method;
+  zenMode.value = shadowingMode.value && method !== 'listen';
+  zenFirstAttempt.value = method === 'attempt';
+}
+
+function toggleFocusMode() {
+  volumeSliderVisible.value = false;
+  playbackRateMenuVisible.value = false;
+  focusMode.value = !focusMode.value;
+}
+const zenFirstAttempt = ref(settings.practiceMethod === 'attempt');
+const zenPhase = ref('idle');
+let zenSession = 0;
+
+function zenNeighbor(offset) {
+  const sentences = player.parsedSentences;
+  return sentences.value[sentences.value.indexOf(player.currentSentence.value) + offset]?.text || '';
+}
+
+function startZenSentence() {
+  if (!player.currentSentence.value) return;
+  clearNoSpeechNotice();
+  if (!zenFirstAttempt.value) {
+    playZenReference(player.currentSentence.value);
+    return;
+  }
+  zenPhase.value = 'first';
+  player.isShadowing.value = true;
+  player.sound.value.seek(player.currentSentence.value.start);
+  startSentenceRecording(player.currentSentence.value);
+}
+
+function playZenReference(sentence) {
+  zenPhase.value = 'reference';
+  player.isShadowing.value = false;
+  player.sound.value.seek(sentence.start);
+  player.sound.value.play();
+}
+
+const completeZenRecording = createZenCompletion({
+  isCurrent: (completion) => zenMode.value && completion.zenSession === zenSession &&
+    completion.sessionId === player.loadSessionId && completion.sentence === player.currentSentence.value,
+  playReference: playZenReference,
+  setPhase: (phase) => { zenPhase.value = phase; },
+  save: saveRecording,
+  preview: previewRecording,
+  advance: (sentence) => {
+      const next = player.repeatOne.value ? sentence : player.getNextSentence();
+      if (!next) {
+        player.stopCurrentPlayback();
+        releaseRecordingResources();
+        return;
+      }
+      player.currentSentence.value = next;
+      startZenSentence();
+  },
+  stop: () => player.stopCurrentPlayback(),
+});
 const recordings = ref({});
 const isRecording = ref(false);
 const recordingError = ref("");
@@ -456,6 +565,11 @@ class Player {
         onplay: () => {
           if (sessionId === this.loadSessionId) this.scheduleStep();
         },
+        onplayerror: () => {
+          if (sessionId !== this.loadSessionId) return;
+          this.stopCurrentPlayback();
+          recordingError.value = '原声无法播放，请检查音频文件后重试。';
+        },
         onend: () => {
           if (sessionId === this.loadSessionId) this.step(true);
         },
@@ -475,6 +589,11 @@ class Player {
   }
 
   togglePlay() {
+    if (zenMode.value) {
+      if (zenPhase.value !== 'idle') this.stopCurrentPlayback();
+      else startZenSentence();
+      return;
+    }
     stopPreview();
     if (this.sound.value.playing() || this.isShadowing.value) {
       const sentence = this.currentSentence.value;
@@ -496,7 +615,16 @@ class Player {
       this.currentSentence.value &&
       currentTime >= this.currentSentence.value.end
     ) {
-      if (shadowingMode.value) {
+      if (zenMode.value && zenPhase.value === 'reference') {
+        this.sound.value.pause();
+        clearTimeout(this.stepTimerId);
+        this.stepTimerId = null;
+        zenPhase.value = 'second';
+        this.isShadowing.value = true;
+        startSentenceRecording(this.currentSentence.value);
+        return;
+      }
+      if (shadowingMode.value && !zenMode.value) {
         if (!this.isShadowing.value) {
           this.sound.value.pause();
           clearTimeout(this.stepTimerId);
@@ -552,6 +680,7 @@ class Player {
   }
 
   handleSentenceChange(sentence) {
+    if (focusMode.value) return;
     if (!followSentence.value || !sentence) return;
     const element = document.getElementById(sentence.start.toString());
     element?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
@@ -572,11 +701,14 @@ class Player {
     this.sound.value.volume(this.volume.value / 100);
     this.isShadowing.value = false;
     this.sound.value.seek(sentence.start);
-    this.sound.value.play();
+    if (!zenMode.value) this.sound.value.play();
     this.handleSentenceChange(sentence);
   }
 
   stopCurrentPlayback() {
+    zenSession++;
+    zenPhase.value = 'idle';
+    stopPreview();
     clearNoSpeechNotice();
     clearTimeout(this.stepTimerId);
     this.stepTimerId = null;
@@ -587,6 +719,7 @@ class Player {
       clearTimeout(this.currentPause);
     }
     stopSentenceRecording(true);
+    if (zenMode.value) releaseRecordingResources();
     this.isShadowing.value = false;
     if (this.sound.value) {
       this.sound.value.volume(this.volume.value / 100);
@@ -622,9 +755,9 @@ class Player {
 
 const player = new Player();
 
-watch([volume, muted, currentPlaybackRate, shadowingMode, player.repeatOne, rightDrawerOpen],
-  ([volume, muted, playbackRate, shadowing, repeatOne, drawerOpen]) => {
-    saveSettings({ volume, muted, playbackRate, shadowing, repeatOne, drawerOpen });
+watch([volume, muted, currentPlaybackRate, shadowingMode, player.repeatOne, rightDrawerOpen, zenFirstAttempt, practiceMethod],
+  ([volume, muted, playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod]) => {
+    saveSettings({ volume, muted, playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod });
   }, { flush: 'sync' });
 
 function playLesson(index) {
@@ -721,27 +854,13 @@ function updateVolume(value) {
   }
 }
 
-async function toggleShadowingMode() {
+function toggleShadowingMode() {
   if (!player.sound.value) return;
-  if (shadowingMode.value) {
-    const wasShadowing = player.isShadowing.value;
-    if (wasShadowing) player.stopCurrentPlayback();
-    shadowingMode.value = false;
-    stopSentenceRecording(true);
-    releaseRecordingResources();
-    player.isShadowing.value = false;
-    if (player.sound.value) {
-      player.sound.value.volume(volume.value / 100);
-      if (wasShadowing) player.sound.value.seek(player.currentSentence.value.start);
-    }
-    return;
-  }
-
-  const sessionId = player.loadSessionId;
-  const ready = await ensureRecorderAccess();
-  if (ready && sessionId === player.loadSessionId) {
-    shadowingMode.value = true;
-  }
+  player.stopCurrentPlayback();
+  releaseRecordingResources();
+  shadowingMode.value = !shadowingMode.value;
+  zenMode.value = shadowingMode.value && practiceMethod.value !== 'listen';
+  player.sound.value.seek(player.currentSentence.value.start);
 }
 
 function setPlaybackRate(rate) {
@@ -815,7 +934,7 @@ async function ensureRecorderAccess() {
 
 function startSentenceRecording(sentence) {
   clearNoSpeechNotice();
-  if (!sentence || !shadowingMode.value) {
+  if (!sentence || (!shadowingMode.value && !zenMode.value)) {
     return;
   }
 
@@ -835,7 +954,7 @@ function startSentenceRecording(sentence) {
     if (
       attempt !== recordingAttempt ||
       !mediaRecorder ||
-      shadowingMode.value === false ||
+      (!shadowingMode.value && !zenMode.value) ||
       !player.isShadowing.value ||
       player.loadSessionId !== sessionId ||
       player.currentSentence.value !== sentence
@@ -894,7 +1013,8 @@ function finishShadowing(reason = 'manual') {
     }, 1000);
     return;
   }
-  completedShadow = { sessionId: player.loadSessionId, sentence: player.currentSentence.value };
+  completedShadow = { sessionId: player.loadSessionId, sentence: player.currentSentence.value,
+    zenSession, zenPhase: zenMode.value ? zenPhase.value : null };
   recordingStatus.value = reason === 'limit' ? '已达到 10 秒录音上限，正在保存…' : '正在完成录音…';
   stopSentenceRecording();
 }
@@ -949,6 +1069,12 @@ function handleRecorderStop() {
   });
 
   pendingRecordingSentence.duration = (performance.now() - recordingStartedAt) / 1000;
+  if (completion?.zenPhase) {
+    const meta = pendingRecordingSentence;
+    resetRecordingState();
+    completeZenRecording(completion, meta, blob);
+    return;
+  }
   saveRecording(pendingRecordingSentence, blob);
   resetRecordingState();
   if (completion && completion.sessionId === player.loadSessionId &&
@@ -969,6 +1095,7 @@ function saveRecording(meta, blob) {
       if (sessionId === player.loadSessionId && meta.lessonId === activeLessonId) {
         recordings.value = { ...recordings.value, [meta.start]: clip };
       }
+      return clip;
     } catch (error) {
       recordingError.value = `录音保存失败：${error.message}`;
       throw error;
@@ -976,6 +1103,7 @@ function saveRecording(meta, blob) {
   })();
   pendingSaves.add(task);
   task.finally(() => pendingSaves.delete(task)).catch(() => {});
+  return task;
 }
 
 async function refreshRecordings(lessonId = activeLessonId, sessionId = player.loadSessionId) {
@@ -1068,12 +1196,12 @@ function stopPreview() {
   previewUrl = null;
 }
 
-async function previewRecording(clip) {
+async function previewRecording(clip, onComplete = null) {
   if (previewClipId.value === clip.id) {
     stopPreview();
     return;
   }
-  player.stopCurrentPlayback();
+  if (!onComplete) player.stopCurrentPlayback();
   stopPreview();
   previewClipId.value = clip.id;
   const session = previewSession;
@@ -1083,17 +1211,22 @@ async function previewRecording(clip) {
     previewUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
     previewAudio = new Audio(previewUrl);
     previewAudio.onended = () => {
-      if (session === previewSession) stopPreview();
+      if (session === previewSession) {
+        stopPreview();
+        onComplete?.();
+      }
     };
     previewAudio.onerror = () => {
       if (session !== previewSession) return;
       stopPreview();
+      if (onComplete) player.stopCurrentPlayback();
       recordingError.value = '录音无法播放，请检查录音文件是否完整。';
     };
     await previewAudio.play();
   } catch (error) {
     if (session === previewSession) {
       stopPreview();
+      if (onComplete) player.stopCurrentPlayback();
       recordingError.value = `录音播放失败：${error.message}`;
     }
   }
@@ -1122,6 +1255,40 @@ function releaseRecordingResources() {
 }
 </script>
 <style>
+.zen-stage {
+  min-height: calc(100vh - 160px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 48px;
+  max-width: 1100px;
+  margin: auto;
+  padding: 32px 24px 80px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.zen-current {
+  font-size: clamp(24px, 4vw, 48px);
+  line-height: 1.6;
+  color: #20354b;
+}
+.zen-neighbor {
+  min-height: 2em;
+  max-height: 3em;
+  overflow: hidden;
+  font-size: clamp(16px, 2vw, 24px);
+  opacity: 0.22;
+  filter: blur(2px);
+  pointer-events: none;
+  user-select: none;
+}
+.zen-sentence-enter-active, .zen-sentence-leave-active {
+  transition: opacity 160ms ease;
+}
+.zen-sentence-enter-from, .zen-sentence-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .zen-sentence-enter-active, .zen-sentence-leave-active { transition: none; }
+}
 .lesson-empty {
   min-height: 55vh;
   display: flex;
@@ -1167,12 +1334,16 @@ function releaseRecordingResources() {
 }
 
 .playback-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 8px;
   padding-top: 8px;
   padding-bottom: 8px;
 }
 
 .sentence-navigation {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1248,6 +1419,32 @@ function releaseRecordingResources() {
   transform: translateX(-50%);
 }
 
+.practice-controls, .playback-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.practice-controls { grid-column: 1; grid-row: 1; }
+.playback-options { grid-column: 3; grid-row: 1; justify-content: flex-end; }
+.practice-menu { width: 360px; max-width: 90vw; }
+.floating-phase {
+  position: absolute;
+  bottom: calc(100% + 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: #56728f;
+  background: #edf3fa;
+  border-radius: 50%;
+  padding: 12px;
+  pointer-events: none;
+}
+@media (max-width: 850px) {
+  .sentence-navigation { grid-column: 1 / -1; justify-self: center; }
+  .practice-controls { grid-column: 1 / 3; grid-row: 2; }
+  .playback-options { grid-column: 3; grid-row: 2; }
+}
+
 .recording-float-enter-active,
 .recording-float-leave-active {
   transition: opacity 200ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1310,6 +1507,20 @@ function releaseRecordingResources() {
 
 .recording-mic--active::before {
   animation: recording-ripple 1.8s ease-out infinite;
+}
+
+.recording-mic--first {
+  color: #8053b5;
+  background: #f4edfc;
+}
+
+.recording-mic--first::before {
+  border: 2px dashed currentColor;
+}
+
+.recording-mic--first.recording-mic--active {
+  color: #673ab7;
+  background: #eadcfa;
 }
 
 .recording-particles {

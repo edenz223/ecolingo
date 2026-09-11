@@ -8,6 +8,9 @@ const detectorSource = fs.readFileSync(path.join(root, 'src/utils/voice-activity
 const detectorScope = {};
 vm.runInNewContext(detectorSource.replaceAll('export function', 'function'), detectorScope);
 const settingsScope = {};
+const zenScope = {};
+vm.runInNewContext(fs.readFileSync(path.join(root, 'src/utils/zen-flow.js'), 'utf8')
+  .replaceAll('export function', 'function'), zenScope);
 vm.runInNewContext(fs.readFileSync(path.join(root, 'src/utils/settings.js'), 'utf8')
   .replaceAll('export function', 'function'), settingsScope);
 
@@ -88,7 +91,7 @@ test('a delayed timer does not invent sustained speech', () => {
 const layout = fs.readFileSync(path.join(root, 'src/layouts/MainLayout.vue'), 'utf8')
   .split('<script setup>')[1].split('</script>')[0].replace(/^import .*;\r?\n/gm, '');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
-function setup({ deferredAccess = false, denied = false } = {}) {
+function setup({ deferredAccess = false, denied = false, saveFailure = false } = {}) {
   let access;
   let update;
   let readPreview;
@@ -122,11 +125,16 @@ function setup({ deferredAccess = false, denied = false } = {}) {
     ref: require('vue').shallowRef, watch: require('vue').watch, onMounted() {}, onUnmounted() {},
     loadSettings: settingsScope.loadSettings, saveSettings: settingsScope.saveSettings,
     createVoiceMonitor: () => monitor,
+    createZenCompletion: zenScope.createZenCompletion,
     navigator: { mediaDevices: { getUserMedia: () => denied
       ? Promise.reject(new Error('Permission denied')) : deferredAccess
         ? new Promise((resolve) => { access = resolve; }) : Promise.resolve(stream) } },
     window: { MediaRecorder: Recorder, fileAPI: {
-      async saveRecording(meta) { saves.push(meta); return meta; },
+      async saveRecording(meta) {
+        if (saveFailure) throw new Error('disk full');
+        saves.push(meta);
+        return meta;
+      },
       readRecording() { return new Promise((resolve) => { readPreview = resolve; }); },
     } },
     Audio: class {
@@ -153,7 +161,9 @@ function setup({ deferredAccess = false, denied = false } = {}) {
     globalThis.h = { player, shadowingMode, isRecording, recordingError, currentPlaybackRate,
       startSentenceRecording, finishShadowing, toggleShadowingMode,
       previewRecording, previewClipId, stopPreview, pauseFollowing, resumeFollowing,
-      closeRecordingError, noSpeechSentence,
+      closeRecordingError, noSpeechSentence, zenMode, zenPhase, zenFirstAttempt, selectPracticeMethod, focusMode,
+      toggleZenMode: () => selectPracticeMethod(zenMode.value ? 'listen' : 'attempt'),
+      toggleZenFirstAttempt: (value) => selectPracticeMethod(value ? 'attempt' : 'replay'),
       releaseRecordingResources, pendingSaves };
     activeLessonId = 'lesson';
   `, context);
@@ -357,5 +367,242 @@ test('sentence navigation cancels a take and prevents its stop event from advanc
     assert.equal(h.sound.at, 1);
     assert.equal(h.sound.playing(), true);
     assert.equal(h.saves.length, 0);
+  } finally { h.cleanup(); }
+});
+
+test('Zen discards first take, saves second, replays and advances only on playback end', async () => {
+  const h = setup();
+  try {
+    h.toggleZenMode();
+    assert.equal(h.isRecording.value, false);
+    assert.equal(h.sound.playing(), false);
+    h.player.togglePlay();
+    await flush();
+    assert.equal(h.zenPhase.value, 'first');
+    h.emit('silence');
+    assert.equal(h.sound.playing(), false);
+    await flush();
+    assert.equal(h.saves.length, 0);
+    assert.equal(h.zenPhase.value, 'reference');
+    h.sound.seek(1);
+    h.player.step();
+    await flush();
+    assert.equal(h.zenPhase.value, 'second');
+    h.emit('silence');
+    await flush();
+    await Promise.all([...h.pendingSaves]);
+    await flush();
+    assert.equal(h.saves.length, 1);
+    assert.equal(h.zenPhase.value, 'preview');
+    assert.equal(h.player.currentSentence.value, h.sentences[0]);
+    h.finishRead();
+    await flush();
+    assert.equal(h.previews[0].playing, true);
+    h.previews[0].onended();
+    await flush();
+    assert.equal(h.player.currentSentence.value, h.sentences[1]);
+    assert.equal(h.zenPhase.value, 'first');
+  } finally { h.cleanup(); }
+});
+
+test('Zen cancellation during permission request cannot restart practice', async () => {
+  const h = setup({ deferredAccess: true });
+  try {
+    h.toggleZenMode();
+    h.player.togglePlay();
+    h.player.togglePlay();
+    h.grant();
+    await flush();
+    assert.equal(h.zenPhase.value, 'idle');
+    assert.equal(h.isRecording.value, false);
+    assert.equal(h.tracks[0].stopped, true);
+    assert.equal(h.saves.length, 0);
+  } finally { h.cleanup(); }
+});
+
+test('Zen no speech pauses without saving; navigation and exit stay paused', async () => {
+  const h = setup();
+  try {
+    h.toggleZenMode();
+    h.player.togglePlay();
+    await flush();
+    h.emit('no-speech');
+    await flush();
+    assert.equal(h.zenPhase.value, 'idle');
+    assert.equal(h.saves.length, 0);
+    assert.equal(h.noSpeechSentence.value, 0);
+    h.player.clickSentence(h.sentences[1]);
+    assert.equal(h.noSpeechSentence.value, null);
+    assert.equal(h.sound.playing(), false);
+    h.toggleZenMode();
+    assert.equal(h.shadowingMode.value, true);
+    assert.equal(h.sound.playing(), false);
+  } finally { h.cleanup(); }
+});
+
+async function reachZenPreview(h) {
+  h.toggleZenMode();
+  h.player.togglePlay();
+  await flush();
+  h.emit('silence');
+  await flush();
+  h.sound.seek(h.player.currentSentence.value.end);
+  h.player.step(true);
+  await flush();
+  h.emit('silence');
+  await flush();
+  await Promise.all([...h.pendingSaves]);
+  await flush();
+}
+
+test('Zen repeats the complete cycle and stops after the final sentence replay', async () => {
+  for (const repeat of [true, false]) {
+    const h = setup();
+    try {
+      h.player.currentSentence.value = h.sentences[1];
+      h.player.repeatOne.value = repeat;
+      await reachZenPreview(h);
+      h.finishRead();
+      await flush();
+      h.previews[0].onended();
+      await flush();
+      assert.equal(h.zenPhase.value, repeat ? 'first' : 'idle');
+      assert.equal(h.player.currentSentence.value, h.sentences[1]);
+      assert.equal(h.saves.length, 1);
+      assert.equal(h.sound.playing(), false);
+    } finally { h.cleanup(); }
+  }
+});
+
+test('Zen stops pending replay and ignores its stale loaded audio after navigation', async () => {
+  const h = setup();
+  try {
+    await reachZenPreview(h);
+    h.player.clickSentence(h.sentences[1]);
+    h.finishRead();
+    await flush();
+    assert.equal(h.previews.length, 0);
+    assert.equal(h.zenPhase.value, 'idle');
+    assert.equal(h.saves.length, 1);
+  } finally { h.cleanup(); }
+});
+
+test('Zen playback failure pauses and preserves the saved second take', async () => {
+  const h = setup();
+  try {
+    await reachZenPreview(h);
+    h.finishRead();
+    await flush();
+    h.previews[0].onerror();
+    assert.equal(h.zenPhase.value, 'idle');
+    assert.equal(h.saves.length, 1);
+    assert.ok(h.recordingError.value);
+  } finally { h.cleanup(); }
+});
+
+test('Zen save failure pauses before replay and never advances', async () => {
+  const h = setup({ saveFailure: true });
+  try {
+    h.toggleZenMode();
+    h.player.togglePlay();
+    await flush();
+    h.emit('silence');
+    await flush();
+    h.sound.seek(1);
+    h.player.step();
+    await flush();
+    h.emit('silence');
+    await flush();
+    await flush();
+    assert.equal(h.zenPhase.value, 'idle');
+    assert.match(h.recordingError.value, /disk full/);
+    assert.equal(h.previews.length, 0);
+    assert.equal(h.player.currentSentence.value, h.sentences[0]);
+  } finally { h.cleanup(); }
+});
+
+test('Zen optional first attempt skips straight to reference and still saves and replays', async () => {
+  const h = setup();
+  try {
+    h.toggleZenMode();
+    h.toggleZenFirstAttempt(false);
+    h.player.togglePlay();
+    assert.equal(h.zenPhase.value, 'reference');
+    assert.equal(h.isRecording.value, false);
+    assert.equal(h.sound.playing(), true);
+    h.sound.seek(1);
+    h.player.step();
+    await flush();
+    assert.equal(h.zenPhase.value, 'second');
+    h.emit('silence');
+    await flush();
+    await flush();
+    assert.equal(h.saves.length, 1);
+    h.finishRead();
+    await flush();
+    h.previews[0].onended();
+    assert.equal(h.player.currentSentence.value, h.sentences[1]);
+    assert.equal(h.zenPhase.value, 'reference');
+    assert.equal(h.isRecording.value, false);
+  } finally { h.cleanup(); }
+});
+
+test('changing first attempt cancels an active take and applies on next start', async () => {
+  const h = setup();
+  try {
+    h.toggleZenMode();
+    h.player.togglePlay();
+    await flush();
+    assert.equal(h.isRecording.value, true);
+    h.toggleZenFirstAttempt(false);
+    await flush();
+    assert.equal(h.zenPhase.value, 'idle');
+    assert.equal(h.isRecording.value, false);
+    assert.equal(h.saves.length, 0);
+    h.player.togglePlay();
+    assert.equal(h.zenPhase.value, 'reference');
+    h.toggleZenFirstAttempt(true);
+    assert.equal(h.sound.playing(), false);
+    h.player.togglePlay();
+    await flush();
+    assert.equal(h.zenPhase.value, 'first');
+  } finally { h.cleanup(); }
+});
+
+test('shadowing is the parent switch: enabling needs no microphone and disabling exits Zen', async () => {
+  const h = setup({ denied: true });
+  try {
+    h.shadowingMode.value = false;
+    h.toggleShadowingMode();
+    assert.equal(h.shadowingMode.value, true);
+    assert.equal(h.zenMode.value, false);
+    assert.equal(h.recordingError.value, '');
+    h.toggleZenMode();
+    assert.equal(h.zenMode.value, true);
+    h.toggleShadowingMode();
+    assert.equal(h.shadowingMode.value, false);
+    assert.equal(h.zenMode.value, false);
+    assert.equal(h.sound.playing(), false);
+    h.toggleZenMode();
+    assert.equal(h.zenMode.value, false);
+  } finally { h.cleanup(); }
+});
+
+test('practice selection is independent from focus layout and survives the master switch', () => {
+  const h = setup();
+  try {
+    h.selectPracticeMethod('replay');
+    assert.equal(h.zenMode.value, true);
+    assert.equal(h.focusMode.value, false);
+    assert.equal(h.zenFirstAttempt.value, false);
+    h.focusMode.value = true;
+    h.toggleShadowingMode();
+    assert.equal(h.focusMode.value, true);
+    h.toggleShadowingMode();
+    assert.equal(h.zenMode.value, true);
+    h.selectPracticeMethod('listen');
+    assert.equal(h.zenMode.value, false);
+    assert.equal(h.focusMode.value, true);
+    assert.equal(h.sound.seek(), h.sentences[0].start);
   } finally { h.cleanup(); }
 });

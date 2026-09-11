@@ -14,7 +14,7 @@ function session(storage) {
 test('all preferences survive a new session, including zero volume and false values', () => {
   const values = new Map();
   const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
-  const expected = { volume: 0, muted: true, playbackRate: 1.3, shadowing: true, repeatOne: true, drawerOpen: false };
+  const expected = { volume: 0, muted: true, playbackRate: 1.3, shadowing: true, repeatOne: true, drawerOpen: false, zenFirstAttempt: false, practiceMethod: 'replay' };
   session(storage).saveSettings(expected);
   assert.equal(JSON.stringify(session(storage).loadSettings()), JSON.stringify(expected));
 });
@@ -28,6 +28,8 @@ test('missing, malformed and invalid preferences fall back safely', () => {
   assert.equal(partial.volume, 25);
   assert.equal(partial.playbackRate, 1);
   assert.equal(partial.shadowing, true);
+  assert.equal(partial.zenFirstAttempt, true);
+  assert.equal(session({ getItem: () => '{"zenFirstAttempt":"false"}' }).loadSettings().zenFirstAttempt, true);
 });
 
 test('unavailable storage does not prevent learning', () => {

@@ -62,7 +62,8 @@
             <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
               class="sentence-item" active-class="sentence-item--active"
               :class="{ 'sentence-preview': previewClipId && recordings[s.start]?.id === previewClipId }"
-              @click="player.clickSentence(s)" :active="!previewClipId && player.currentSentence.value === s">
+              @click="player.handleSentenceClick(s, $event)" @dblclick="player.doubleClickSentence(s)"
+              :active="!previewClipId && player.currentSentence.value === s">
               <q-item-section>
                 <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
               </q-item-section>
@@ -641,16 +642,29 @@ class Player {
     return this.parsedSentences.value[currentIndex + 1];
   }
 
-  async clickSentence(sentence) {
+  async clickSentence(sentence, forcePlay = false) {
     if (!this.sound.value || !sentence) return;
+    const wasPlayingZenReference =
+      zenMode.value && zenPhase.value === 'reference' && this.sound.value.playing();
     this.stopCurrentPlayback();
     stopPreview();
     this.currentSentence.value = sentence;
     this.sound.value.volume(this.volume.value / 100);
     this.isShadowing.value = false;
     this.sound.value.seek(sentence.start);
-    if (!zenMode.value) this.sound.value.play();
+    if (zenMode.value && (forcePlay || wasPlayingZenReference)) playZenReference(sentence);
+    else if (!zenMode.value) this.sound.value.play();
     this.handleSentenceChange(sentence);
+  }
+
+  handleSentenceClick(sentence, event) {
+    if (event?.detail > 1) return;
+    return this.clickSentence(sentence);
+  }
+
+  doubleClickSentence(sentence) {
+    if (this.currentSentence.value === sentence && this.sound.value?.playing()) return;
+    return this.clickSentence(sentence, true);
   }
 
   stopCurrentPlayback() {

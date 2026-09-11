@@ -170,8 +170,8 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
   const { h } = context;
   const sentences = [{ start: 0, end: 1, text: 'one' }, { start: 1, end: 2, text: 'two' }];
   const sound = {
-    active: true, at: 1, playing() { return this.active; },
-    play() { this.active = true; }, pause() { this.active = false; },
+    active: true, at: 1, playCalls: 0, playing() { return this.active; },
+    play() { this.playCalls++; this.active = true; }, pause() { this.active = false; },
     seek(value) { if (value !== undefined) this.at = value; return this.at; },
     volume() {}, unload() {}, duration: () => 2,
   };
@@ -437,6 +437,64 @@ test('Zen no speech pauses without saving; navigation and exit stay paused', asy
     h.toggleZenMode();
     assert.equal(h.shadowingMode.value, true);
     assert.equal(h.sound.playing(), false);
+  } finally { h.cleanup(); }
+});
+
+test('clicking another sentence while Zen reference audio is playing continues with that reference', () => {
+  const h = setup();
+  try {
+    h.toggleZenMode();
+    h.toggleZenFirstAttempt(false);
+    h.player.togglePlay();
+    assert.equal(h.zenPhase.value, 'reference');
+    assert.equal(h.sound.playing(), true);
+
+    h.player.clickSentence(h.sentences[1]);
+
+    assert.equal(h.player.currentSentence.value, h.sentences[1]);
+    assert.equal(h.sound.at, h.sentences[1].start);
+    assert.equal(h.sound.playing(), true);
+    assert.equal(h.zenPhase.value, 'reference');
+  } finally { h.cleanup(); }
+});
+
+test('double-clicking a sentence starts its reference audio from any Zen phase', async () => {
+  const h = setup();
+  try {
+    h.toggleZenMode();
+    h.player.togglePlay();
+    await flush();
+    assert.equal(h.zenPhase.value, 'first');
+    assert.equal(h.isRecording.value, true);
+
+    h.player.doubleClickSentence(h.sentences[1]);
+    await flush();
+
+    assert.equal(h.player.currentSentence.value, h.sentences[1]);
+    assert.equal(h.sound.at, h.sentences[1].start);
+    assert.equal(h.sound.playing(), true);
+    assert.equal(h.zenPhase.value, 'reference');
+    assert.equal(h.isRecording.value, false);
+    assert.equal(h.saves.length, 0);
+  } finally { h.cleanup(); }
+});
+
+test('a browser double-click sequence starts only one new audio playback', () => {
+  const h = setup();
+  try {
+    h.toggleZenMode();
+    h.toggleZenFirstAttempt(false);
+    h.player.togglePlay();
+    const initialPlayCalls = h.sound.playCalls;
+
+    h.player.handleSentenceClick(h.sentences[1], { detail: 1 });
+    h.player.handleSentenceClick(h.sentences[1], { detail: 2 });
+    h.player.doubleClickSentence(h.sentences[1]);
+
+    assert.equal(h.sound.playCalls, initialPlayCalls + 1);
+    assert.equal(h.player.currentSentence.value, h.sentences[1]);
+    assert.equal(h.sound.playing(), true);
+    assert.equal(h.zenPhase.value, 'reference');
   } finally { h.cleanup(); }
 });
 

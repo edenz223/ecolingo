@@ -1,15 +1,56 @@
 <template>
-  <q-layout view="hHh lpR fFf" class="bg-grey-1">
-    <q-header v-if="!focusMode" elevated class="bg-primary text-white">
-      <q-toolbar class="wrap">
-        <q-toolbar-title> Ecolingo </q-toolbar-title>
-        <q-btn flat label="打开课程" icon="folder_open" @click="openFolder" />
-      </q-toolbar>
+  <q-layout view="hHh lpR fFf" class="app-shell" :class="{ 'windows-titlebar': isWindows }">
+    <q-header v-if="!focusMode" class="glass-header">
+      <div class="system-titlebar">
+        <div class="titlebar-leading">
+          <span class="app-brand">EcoLingo</span>
+          <button type="button" class="titlebar-menu-btn" aria-label="打开文件夹" @click="openFolder">
+            文件夹
+          </button>
+          <button type="button" class="titlebar-menu-btn" aria-label="查看键盘快捷键" @click="showShortcuts = true">
+            帮助
+          </button>
+        </div>
+      </div>
+      <div class="lesson-heading">
+        <div v-if="player.parsedSentences.value.length" class="lesson-progress">
+          <div class="ellipsis">{{ lessons[currentLessonIndex]?.name || player.currentLesson?.name }}</div>
+          <span class="lesson-count">第 {{ Math.max(1, player.parsedSentences.value.indexOf(player.currentSentence.value) + 1) }} / {{ player.parsedSentences.value.length }} 句</span>
+        </div>
+        <q-btn v-if="!followSentence && player.parsedSentences.value.length" flat dense color="primary"
+          icon="my_location" label="回到当前句" class="follow-btn" @click="resumeFollowing" />
+        <q-btn flat round dense class="top-action top-sidebar-toggle" size="sm"
+          aria-label="显示或隐藏课程列表" :aria-expanded="rightDrawerOpen"
+          @click="rightDrawerOpen = !rightDrawerOpen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M16 4v16" />
+          </svg>
+          <q-tooltip class="small-tooltip">显示或隐藏课程列表</q-tooltip>
+        </q-btn>
+      </div>
     </q-header>
+
+    <q-dialog v-model="showShortcuts">
+      <q-card class="glass-dialog" style="width: 360px; max-width: 90vw">
+        <q-card-section class="text-h6 q-pb-none">键盘快捷键</q-card-section>
+        <q-card-section style="white-space: pre-line; line-height: 1.8; color: var(--ink);">
+          空格：播放 / 暂停
+          S：跟读开关
+          A / D：上一句 / 下一句
+          Q / E：上一课 / 下一课
+          C / X：加速 / 减速
+          Z：重置速度
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat color="primary" label="关闭" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <q-dialog :model-value="Boolean(recordingError)" persistent aria-labelledby="recording-error-title"
       aria-describedby="recording-error-message">
-      <q-card style="width: 420px; max-width: 90vw">
+      <q-card class="glass-dialog" style="width: 420px; max-width: 90vw">
         <q-card-section id="recording-error-title" class="text-h6 text-negative">
           <q-icon name="warning" class="q-mr-sm" />录音提示
         </q-card-section>
@@ -20,11 +61,11 @@
       </q-card>
     </q-dialog>
 
-    <q-drawer v-if="!focusMode" v-model="rightDrawerOpen" show-if-above :breakpoint="500" side="right" bordered class="bg-white">
+    <q-drawer v-if="!focusMode" v-model="rightDrawerOpen" show-if-above :breakpoint="900" side="right" class="glass-drawer">
       <q-scroll-area class="fit">
         <q-list>
           <q-item-label header>课程列表</q-item-label>
-          <q-item v-for="(lesson, index) in lessons" :key="lesson.name" clickable v-ripple @click="playLesson(index)"
+          <q-item v-for="(lesson, index) in lessons" :key="lesson.name" clickable @click="playLesson(index)"
             :class="{
               'lesson-item': true,
               'lesson-item--active': currentLessonIndex === index,
@@ -38,17 +79,12 @@
     </q-drawer>
 
     <q-page-container>
-      <q-page padding>
+      <q-page padding class="learning-page">
         <div v-if="!player.parsedSentences.value.length" class="lesson-empty">
           <q-icon name="headphones" size="48px" color="primary" />
           <div class="text-h6">{{ lessonLoading ? '正在打开课程…' : '开始今天的跟读' }}</div>
           <div class="text-grey-7">选择包含音频和字幕的文件夹</div>
           <q-btn unelevated color="primary" icon="folder_open" label="打开课程文件夹" :loading="lessonLoading" @click="openFolder" />
-        </div>
-        <div v-else-if="!focusMode" class="lesson-progress">
-          <div class="ellipsis">{{ lessons[currentLessonIndex]?.name || player.currentLesson?.name }}</div>
-          <span class="text-grey-7">第 {{ Math.max(1, player.parsedSentences.value.indexOf(player.currentSentence.value) + 1) }} / {{ player.parsedSentences.value.length }} 句</span>
-          <q-btn v-if="!followSentence" flat dense color="primary" icon="my_location" label="回到当前句" @click="resumeFollowing" />
         </div>
         <div v-if="focusMode" class="zen-stage">
           <div class="zen-neighbor" aria-hidden="true">{{ zenNeighbor(-1) }}</div>
@@ -57,9 +93,9 @@
           </Transition>
           <div class="zen-neighbor" aria-hidden="true">{{ zenNeighbor(1) }}</div>
         </div>
-        <div v-else id="sentences" class="q-pa-md" @wheel.passive="pauseFollowing" @touchmove.passive="pauseFollowing">
-          <q-list separator>
-            <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable v-ripple
+        <div v-else id="sentences" class="q-pa-md sentences-panel" @wheel.passive="pauseFollowing" @touchmove.passive="pauseFollowing">
+          <q-list>
+            <q-item v-for="s in player.parsedSentences.value" :key="s.start" clickable
               class="sentence-item" active-class="sentence-item--active"
               :class="{ 'sentence-preview': previewClipId && recordings[s.start]?.id === previewClipId }"
               @click="player.handleSentenceClick(s, $event)" @dblclick="player.doubleClickSentence(s)"
@@ -69,6 +105,7 @@
               </q-item-section>
               <q-item-section side class="sentence-actions">
                 <q-btn v-if="recordings[s.start] && !isRecording && noSpeechSentence !== s.start" round dense flat
+                  class="sentence-recording-button"
                   :icon="previewClipId === recordings[s.start].id ? 'stop_circle' : 'play_circle'"
                   :color="previewClipId === recordings[s.start].id ? 'primary' : undefined"
                   :aria-label="previewClipId === recordings[s.start].id ? '停止回放' : '播放此句最新录音'"
@@ -82,7 +119,7 @@
       </q-page>
     </q-page-container>
 
-    <q-footer elevated class="bg-grey-8 text-white">
+    <q-footer class="glass-footer">
       <Transition name="recording-float">
       <div v-if="isRecording || noSpeechSentence !== null" class="floating-recording" role="status"
         aria-live="polite" aria-atomic="true">
@@ -111,10 +148,10 @@
       </div>
       <q-toolbar class="wrap playback-toolbar">
         <div class="sentence-navigation">
-        <q-btn flat round icon="skip_previous" aria-label="上一句" :disable="!player.currentSentence.value" @click="beforeSentence">
+        <q-btn flat round class="transport-button" icon="skip_previous" aria-label="上一句" :disable="!player.currentSentence.value" @click="beforeSentence">
           <q-tooltip class="small-tooltip">上一句 · A</q-tooltip>
         </q-btn>
-        <q-btn round unelevated color="primary" size="lg" :disable="!player.currentSentence.value"
+        <q-btn round unelevated color="primary" size="lg" class="primary-play" :disable="!player.currentSentence.value"
           :aria-label="player.isShadowing.value || (player.sound.value && player.sound.value.playing()) ? '暂停' : '播放'"
           :icon="player.isShadowing.value || (player.sound.value && player.sound.value.playing())
           ? 'pause'
@@ -126,29 +163,21 @@
               : "播放"
           }} · 空格</q-tooltip>
         </q-btn>
-        <q-btn flat round icon="skip_next" aria-label="下一句" :disable="!player.currentSentence.value" @click="nextSentence">
+        <q-btn flat round class="transport-button" icon="skip_next" aria-label="下一句" :disable="!player.currentSentence.value" @click="nextSentence">
           <q-tooltip class="small-tooltip">下一句 · D</q-tooltip>
         </q-btn>
         </div>
 
         <div class="practice-controls">
 
-          <q-btn flat dense icon="volume_up" class="volume-control" aria-label="音量" :disable="!player.sound.value">
-            <q-tooltip>音量 · M 静音</q-tooltip>
-            <q-menu v-model="volumeSliderVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
-              class="q-pa-md">
-              <q-slider v-model="volume" aria-label="音量" :min="0" :max="100" vertical reverse @change="updateVolume" class="no-border"
-                style="height: 80px" />
-            </q-menu>
-          </q-btn>
-          <q-toggle :model-value="shadowingMode" label="跟读" color="light-blue-4"
-            :disable="!player.sound.value" @update:model-value="toggleShadowingMode">
-            <q-tooltip class="small-tooltip">
-              {{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S
-            </q-tooltip>
-          </q-toggle>
+          <button type="button" class="ios-switch-control" role="switch" :aria-checked="shadowingMode"
+            :disabled="!player.sound.value" @click="toggleShadowingMode">
+            <span class="ios-switch" aria-hidden="true"><span class="ios-switch__thumb" /></span>
+            <span>跟读</span>
+            <q-tooltip class="small-tooltip">{{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S</q-tooltip>
+          </button>
           <q-btn v-if="shadowingMode" flat no-caps :label="'练习方式：' + practiceMethods.find(method => method.id === practiceMethod).label"
-            icon-right="expand_more" aria-label="选择练习方式">
+            class="glass-action" icon-right="expand_more" aria-label="选择练习方式">
             <q-menu anchor="top right" self="bottom right">
               <q-list class="practice-menu">
                 <q-item-label header>选择接下来的练习流程</q-item-label>
@@ -191,10 +220,6 @@
             </q-list>
           </q-menu>
           </q-btn>
-        <q-btn v-if="!focusMode" flat dense icon="queue_music" label="课程" aria-label="显示或隐藏课程列表"
-          :aria-expanded="rightDrawerOpen" @click="rightDrawerOpen = !rightDrawerOpen">
-          <q-tooltip class="small-tooltip">课程列表 · Q / E 切换课程</q-tooltip>
-        </q-btn>
         </div>
       </q-toolbar>
     </q-footer>
@@ -209,12 +234,11 @@ import { createZenCompletion } from '../utils/zen-flow';
 import { loadSettings, saveSettings } from '../utils/settings';
 
 const settings = loadSettings();
+const isWindows = window.fileAPI?.platform === 'win32';
+const showShortcuts = ref(false);
 const rightDrawerOpen = ref(settings.drawerOpen);
 const lessons = ref([]);
 const currentLessonIndex = ref(-1);
-const volume = ref(settings.volume);
-const muted = ref(settings.muted);
-const volumeSliderVisible = ref(false);
 const followSentence = ref(true);
 const lessonLoading = ref(false);
 
@@ -232,7 +256,6 @@ function selectPracticeMethod(method) {
   if (!shadowingMode.value || !player.sound.value || !practiceMethods.some(item => item.id === method)) return;
   player.stopCurrentPlayback();
   releaseRecordingResources();
-  volumeSliderVisible.value = false;
   playbackRateMenuVisible.value = false;
   player.sound.value.seek(player.currentSentence.value.start);
   practiceMethod.value = method;
@@ -241,7 +264,6 @@ function selectPracticeMethod(method) {
 }
 
 function toggleFocusMode() {
-  volumeSliderVisible.value = false;
   playbackRateMenuVisible.value = false;
   focusMode.value = !focusMode.value;
 }
@@ -351,7 +373,7 @@ function handleKeyDown(event) {
   if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.code)) pauseFollowing();
   if (!player.sound.value && !['KeyQ', 'KeyE', 'KeyR'].includes(event.code)) return;
   if (event.ctrlKey && event.code !== 'KeyR') return;
-  if (!['Space', 'KeyS', 'KeyD', 'KeyA', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyM', 'KeyR'].includes(event.code)) return;
+  if (!['Space', 'KeyS', 'KeyD', 'KeyA', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyR'].includes(event.code)) return;
   if (event.code === 'KeyR' && !event.ctrlKey) return;
   event.preventDefault();
   if (event.code === 'Space' && !event.target.closest('input, textarea')) {
@@ -383,11 +405,6 @@ function handleKeyDown(event) {
   // Key Z to reset playback rate to 1
   if (event.code === 'KeyZ' && !event.target.closest('input, textarea')) {
     setPlaybackRate(1);
-  }
-  // Key M to toggle mute
-  if (event.code === 'KeyM' && !event.target.closest('input, textarea')) {
-    muted.value = !muted.value;
-    player.sound.value?.mute(muted.value);
   }
   // Control + KeyR to reload the page
   if (event.code === 'KeyR' && event.ctrlKey) {
@@ -426,7 +443,6 @@ class Player {
     this.isScrolling = ref(false);
     this.currentPause = null;
     this.repeatOne = ref(settings.repeatOne);
-    this.volume = volume;
     this.isShadowing = ref(false);
     this.playbackRate = currentPlaybackRate;
   }
@@ -491,8 +507,6 @@ class Player {
         src: [audioFilePath],
         html5: true,
         format: ["mp3", "wav", "ogg", "aac", "flac", "m4a"],
-        volume: this.volume.value / 100,
-        mute: muted.value,
         rate: this.playbackRate.value,
         onload: () => {
           if (sessionId !== this.loadSessionId) return;
@@ -649,7 +663,6 @@ class Player {
     this.stopCurrentPlayback();
     stopPreview();
     this.currentSentence.value = sentence;
-    this.sound.value.volume(this.volume.value / 100);
     this.isShadowing.value = false;
     this.sound.value.seek(sentence.start);
     if (zenMode.value && (forcePlay || wasPlayingZenReference)) playZenReference(sentence);
@@ -683,9 +696,6 @@ class Player {
     stopSentenceRecording(true);
     if (zenMode.value) releaseRecordingResources();
     this.isShadowing.value = false;
-    if (this.sound.value) {
-      this.sound.value.volume(this.volume.value / 100);
-    }
   }
 
   sleep(ms) {
@@ -717,9 +727,9 @@ class Player {
 
 const player = new Player();
 
-watch([volume, muted, currentPlaybackRate, shadowingMode, player.repeatOne, rightDrawerOpen, zenFirstAttempt, practiceMethod],
-  ([volume, muted, playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod]) => {
-    saveSettings({ volume, muted, playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod });
+watch([currentPlaybackRate, shadowingMode, player.repeatOne, rightDrawerOpen, zenFirstAttempt, practiceMethod],
+  ([playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod]) => {
+    saveSettings({ playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod });
   }, { flush: 'sync' });
 
 function playLesson(index) {
@@ -807,13 +817,6 @@ function next() {
 
 function openFolder() {
   window.fileAPI.openFolder();
-}
-
-function updateVolume(value) {
-  player.volume.value = value;
-  if (player.sound.value) {
-    player.sound.value.volume(value / 100);
-  }
 }
 
 function toggleShadowingMode() {
@@ -1178,17 +1181,27 @@ function releaseRecordingResources() {
   padding: 32px 24px 80px;
   text-align: center;
   overflow-wrap: anywhere;
+  border: 1px solid var(--glass-border);
+  border-radius: 32px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.17));
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
 }
 .zen-current {
-  font-size: clamp(24px, 4vw, 48px);
-  line-height: 1.6;
-  color: #20354b;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 1.5;
+  color: var(--ink-strong);
+  font-weight: 500;
+  letter-spacing: -0.015em;
 }
 .zen-neighbor {
   min-height: 2em;
   max-height: 3em;
   overflow: hidden;
-  font-size: clamp(16px, 2vw, 24px);
+  font-size: clamp(16px, 2vw, 22px);
+  line-height: 1.5;
   opacity: 0.22;
   filter: blur(2px);
   pointer-events: none;
@@ -1209,48 +1222,140 @@ function releaseRecordingResources() {
   justify-content: center;
   gap: 16px;
   text-align: center;
+  max-width: 520px;
+  margin: auto;
+  padding: 56px 32px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.24));
+  border: 1px solid var(--glass-border);
+  border-radius: 28px;
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(140%);
+}
+
+.lesson-empty .text-h6 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.lesson-empty .text-grey-7 {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.lesson-empty > .q-icon {
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 22px;
+  box-shadow: 0 12px 30px rgba(39, 119, 211, 0.12), inset 0 1px rgba(255, 255, 255, 0.82);
+}
+
+.lesson-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 16px;
+  -webkit-app-region: no-drag;
 }
 
 .lesson-progress {
-  position: sticky;
-  top: 50px;
-  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
+  flex: 1;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 12px;
-  padding: 12px 16px;
-  background: #fafafa;
-  border-bottom: 1px solid #e5e7eb;
+  min-width: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 .lesson-progress .ellipsis {
-  flex: 1 1 180px;
+  flex: 0 1 auto;
+  max-width: min(50vw, 520px);
   min-width: 0;
+}
+
+.lesson-count {
+  white-space: nowrap;
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.follow-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.lesson-heading > .top-sidebar-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .sentence-item.sentence-preview,
 .sentence-preview {
-  background: #eaf2ff;
-  box-shadow: inset -3px 0 #1976d2;
+  background: rgba(184, 220, 255, 0.36);
+  box-shadow: inset -3px 0 var(--accent), 0 8px 24px rgba(39, 119, 211, 0.08);
+}
+
+.sentences-panel {
+  margin: 10px 16px 30px;
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 24px;
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.sentences-panel .q-list {
+  display: grid;
+  gap: 5px;
 }
 
 .sentence-item {
   min-height: 64px;
-  color: #374151;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.6;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.sentence-item:hover {
+  background: rgba(255, 255, 255, 0.38);
+  border-color: rgba(255, 255, 255, 0.62);
 }
 
 .sentence-item.sentence-item--active {
-  background-color: #eaf2ff;
-  color: #1e40af;
+  color: #1d5792;
+  background: rgba(184, 220, 255, 0.36);
+  border-color: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 8px 24px rgba(39, 119, 211, 0.08), inset 0 1px rgba(255, 255, 255, 0.66);
 }
 
 .playback-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 8px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  gap: 12px;
+  padding: 10px 14px;
 }
 
 .sentence-navigation {
@@ -1259,6 +1364,21 @@ function releaseRecordingResources() {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 999px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.7), 0 8px 24px rgba(47, 74, 104, 0.08);
+}
+
+.transport-button {
+  color: var(--ink-strong);
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.46);
+}
+
+.primary-play {
+  box-shadow: 0 10px 26px rgba(39, 119, 211, 0.28), inset 0 1px rgba(255, 255, 255, 0.42) !important;
 }
 
 .q-drawer {
@@ -1266,31 +1386,24 @@ function releaseRecordingResources() {
 }
 
 .q-drawer--fixed {
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  box-shadow: -12px 0 42px rgba(47, 74, 104, 0.11) !important;
 }
 
 .lesson-item {
+  font-size: 14px;
+  line-height: 1.45;
   transition: background-color 0.3s;
 }
 
 .lesson-item--active {
-  background-color: #e0e0e0 !important;
-  font-weight: bold;
+  color: #1d5792;
+  background: rgba(184, 220, 255, 0.38) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.7);
+  font-weight: 650;
 }
 
 .small-tooltip {
-  font-size: 0.8em;
-}
-
-.volume-control-container {
-  position: relative;
-  display: inline-block;
-}
-
-.volume-slider-menu {
-  border-radius: 4px;
-  /* padding: 18px; */
-  transition: opacity 0.3s;
+  font-size: var(--text-caption);
 }
 
 .playback-rate-container {
@@ -1313,6 +1426,13 @@ function releaseRecordingResources() {
   gap: 6px;
 }
 
+.sentence-recording-button {
+  color: #2b6dab;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  box-shadow: 0 6px 18px rgba(39, 119, 211, 0.1), inset 0 1px rgba(255, 255, 255, 0.78);
+}
+
 .floating-recording {
   position: absolute;
   top: -82px;
@@ -1323,10 +1443,10 @@ function releaseRecordingResources() {
   justify-content: center;
   width: 60px;
   height: 60px;
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 4px 16px rgba(35, 49, 65, 0.10), 0 12px 32px rgba(35, 49, 65, 0.06);
+  background: transparent;
+  filter: drop-shadow(0 12px 22px rgba(35, 49, 65, 0.14));
   pointer-events: none;
   transform: translateX(-50%);
 }
@@ -1334,24 +1454,100 @@ function releaseRecordingResources() {
 .practice-controls, .playback-options {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  min-height: 46px;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.64);
+  overflow: hidden;
 }
-.practice-controls { grid-column: 1; grid-row: 1; }
-.playback-options { grid-column: 3; grid-row: 1; justify-content: flex-end; }
+.practice-controls { grid-column: 1; grid-row: 1; justify-self: start; }
+.playback-options { grid-column: 3; grid-row: 1; justify-self: end; justify-content: flex-end; }
 .practice-menu { width: 360px; max-width: 90vw; }
+
+.practice-menu .q-item__label:not(.q-item__label--caption) {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ios-switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 4px 10px 4px 6px;
+  color: var(--ink-strong);
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+}
+
+.ios-switch-control:hover {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.ios-switch-control:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.ios-switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  background: rgba(69, 85, 103, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 3px rgba(36, 55, 74, 0.14);
+  transition: background-color 180ms ease;
+}
+
+.ios-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(28, 48, 68, 0.28);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ios-switch-control[aria-checked='true'] .ios-switch {
+  background: linear-gradient(145deg, #64b3fb, #2d80dc);
+}
+
+.ios-switch-control[aria-checked='true'] .ios-switch__thumb {
+  transform: translateX(16px);
+}
 .floating-phase {
   position: absolute;
   bottom: calc(100% + 28px);
   left: 50%;
   transform: translateX(-50%);
-  color: #56728f;
-  background: #edf3fa;
+  display: grid;
+  width: 60px;
+  height: 60px;
+  place-items: center;
+  padding: 0;
+  color: #426986;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(221, 238, 250, 0.54));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 28px rgba(35, 49, 65, 0.13), inset 0 1px rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
   border-radius: 50%;
-  padding: 12px;
   pointer-events: none;
 }
 @media (max-width: 850px) {
+  .playback-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .practice-controls { min-width: 0; }
   .sentence-navigation { grid-column: 1 / -1; justify-self: center; }
   .practice-controls { grid-column: 1 / 3; grid-row: 2; }
   .playback-options { grid-column: 3; grid-row: 2; }
@@ -1381,6 +1577,9 @@ function releaseRecordingResources() {
 }
 
 .recording-mic {
+  --recording-accent: #c95060;
+  --recording-rgb: 201, 80, 96;
+  box-sizing: border-box;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1388,14 +1587,18 @@ function releaseRecordingResources() {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  color: #d45360;
-  background: #fff0f1;
-  transition: color 240ms ease, background-color 240ms ease;
+  color: var(--recording-accent);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(var(--recording-rgb), 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  box-shadow: 0 10px 26px rgba(var(--recording-rgb), 0.18), inset 0 1px rgba(255, 255, 255, 0.96);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  transition: color 240ms ease, background 240ms ease, box-shadow 240ms ease;
 }
 
 .recording-mic--floating {
-  width: 46px;
-  height: 46px;
+  width: 60px;
+  height: 60px;
 }
 
 .recording-mic::before {
@@ -1413,8 +1616,8 @@ function releaseRecordingResources() {
 }
 
 .recording-mic--active {
-  color: #229b72;
-  background: #eaf8f1;
+  --recording-accent: #208e69;
+  --recording-rgb: 32, 142, 105;
 }
 
 .recording-mic--active::before {
@@ -1422,8 +1625,8 @@ function releaseRecordingResources() {
 }
 
 .recording-mic--first {
-  color: #8053b5;
-  background: #f4edfc;
+  --recording-accent: #7951ab;
+  --recording-rgb: 121, 81, 171;
 }
 
 .recording-mic--first::before {
@@ -1431,8 +1634,8 @@ function releaseRecordingResources() {
 }
 
 .recording-mic--first.recording-mic--active {
-  color: #673ab7;
-  background: #eadcfa;
+  --recording-accent: #6840a0;
+  --recording-rgb: 104, 64, 160;
 }
 
 .recording-particles {
@@ -1456,8 +1659,8 @@ function releaseRecordingResources() {
 }
 
 .recording-mic--silent {
-  color: #b88429;
-  background: #fff5e3;
+  --recording-accent: #a8731c;
+  --recording-rgb: 168, 115, 28;
 }
 
 .recording-mic--silent::before {
@@ -1502,6 +1705,8 @@ function releaseRecordingResources() {
   }
 
   .recording-mic,
+  .ios-switch,
+  .ios-switch__thumb,
   .recording-float-enter-active,
   .recording-float-leave-active {
     transition: none;

@@ -1,21 +1,20 @@
 <template>
-  <div class="fullscreen bg-blue text-white text-center q-pa-md flex flex-center">
-    <div>
-      <div style="font-size: 30vh">
+  <div class="fullscreen glass-error-page text-center q-pa-md flex flex-center">
+    <div class="glass-error-panel">
+      <div class="glass-error-code">
         404
       </div>
 
-      <div class="text-h2" style="opacity:.4">
-        Oops. Nothing here...
+      <div class="text-h4 glass-error-copy">
+        页面走丢了
       </div>
 
       <q-btn
         class="q-mt-xl"
-        color="white"
-        text-color="blue"
+        color="primary"
         unelevated
         to="/"
-        label="Go Home"
+        label="返回学习页"
         no-caps
       />
     </div>

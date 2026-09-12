@@ -70,9 +70,29 @@ function createWindow() {
    */
   mainWindow = new BrowserWindow({
     icon: path.resolve(__dirname, "icons/icon.png"), // tray icon
+    title: 'EcoLingo',
     width: 1000,
     height: 600,
+    minWidth: 600,
+    minHeight: 520,
+    show: false,
+    frame: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#00ffffff',
+      symbolColor: '#5c6b77',
+      height: 34,
+    },
+    resizable: true,
+    maximizable: true,
+    fullscreenable: true,
+    thickFrame: true,
     useContentSize: true,
+    backgroundColor: '#edf2f7',
+    ...(platform === 'win32' ? {
+      backgroundMaterial: 'mica',
+      roundedCorners: true,
+    } : {}),
     webPreferences: {
       // Keep the audio-clock checks running while the lesson window is minimized.
       backgroundThrottling: false,
@@ -86,7 +106,10 @@ function createWindow() {
     menuBarVisible: false,
   });
 
+  if (platform === 'win32') mainWindow.setMaximizable(true);
+
   mainWindow.loadURL(process.env.APP_URL);
+  mainWindow.once('ready-to-show', () => mainWindow?.show());
   if (process.env.DEBUGGING) {
     // if on DEV or Production with debug enabled
     mainWindow.webContents.openDevTools();
@@ -223,7 +246,7 @@ const template = [
         click: async () => {
           await dialog.showMessageBox(mainWindow, {
             type: 'info', title: '键盘快捷键',
-            message: '空格：播放 / 暂停\nS：跟读开关\nA / D：上一句 / 下一句\nQ / E：上一课 / 下一课\nC / X：加速 / 减速\nZ：重置速度\nM：静音',
+            message: '空格：播放 / 暂停\nS：跟读开关\nA / D：上一句 / 下一句\nQ / E：上一课 / 下一课\nC / X：加速 / 减速\nZ：重置速度',
             buttons: ['关闭'],
           });
         },

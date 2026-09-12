@@ -81,6 +81,73 @@ html {
   box-shadow: 0 4px 24px rgba(47, 74, 104, 0.04), inset 0 1px rgba(255, 255, 255, 0.8) !important;
 }
 
+.system-titlebar {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  padding: 0 10px;
+  background: rgba(248, 250, 252, 0.72);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  user-select: none;
+}
+
+.windows-titlebar .system-titlebar {
+  -webkit-app-region: drag;
+  padding-right: 138px;
+}
+
+.windows-titlebar .system-titlebar button,
+.windows-titlebar .system-titlebar .titlebar-menu-btn,
+.windows-titlebar .system-titlebar .q-btn {
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-leading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.app-brand {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: #52606d;
+  padding: 2px 8px 2px 2px;
+  letter-spacing: -0.01em;
+}
+
+.titlebar-menu-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: #5c6b77;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 3px 8px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.titlebar-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1e293b;
+}
+
+.titlebar-menu-btn:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.titlebar-menu-btn:focus-visible {
+  outline: 1.5px solid rgba(39, 119, 211, 0.5);
+  outline-offset: 1px;
+}
+
 .top-sidebar-toggle {
   width: 30px;
   height: 30px;

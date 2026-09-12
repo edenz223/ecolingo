@@ -1,6 +1,17 @@
 <template>
-  <q-layout view="hHh lpR fFf" class="app-shell">
+  <q-layout view="hHh lpR fFf" class="app-shell" :class="{ 'windows-titlebar': isWindows }">
     <q-header v-if="!focusMode" class="glass-header">
+      <div class="system-titlebar">
+        <div class="titlebar-leading">
+          <span class="app-brand">EcoLingo</span>
+          <button type="button" class="titlebar-menu-btn" aria-label="打开文件夹" @click="openFolder">
+            文件
+          </button>
+          <button type="button" class="titlebar-menu-btn" aria-label="查看键盘快捷键" @click="showShortcuts = true">
+            帮助
+          </button>
+        </div>
+      </div>
       <div class="lesson-heading">
         <div v-if="player.parsedSentences.value.length" class="lesson-progress">
           <div class="ellipsis">{{ lessons[currentLessonIndex]?.name || player.currentLesson?.name }}</div>
@@ -19,6 +30,23 @@
         </q-btn>
       </div>
     </q-header>
+
+    <q-dialog v-model="showShortcuts">
+      <q-card class="glass-dialog" style="width: 360px; max-width: 90vw">
+        <q-card-section class="text-h6 q-pb-none">键盘快捷键</q-card-section>
+        <q-card-section style="white-space: pre-line; line-height: 1.8; color: var(--ink);">
+          空格：播放 / 暂停
+          S：跟读开关
+          A / D：上一句 / 下一句
+          Q / E：上一课 / 下一课
+          C / X：加速 / 减速
+          Z：重置速度
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat color="primary" label="关闭" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <q-dialog :model-value="Boolean(recordingError)" persistent aria-labelledby="recording-error-title"
       aria-describedby="recording-error-message">
@@ -206,6 +234,8 @@ import { createZenCompletion } from '../utils/zen-flow';
 import { loadSettings, saveSettings } from '../utils/settings';
 
 const settings = loadSettings();
+const isWindows = window.fileAPI?.platform === 'win32';
+const showShortcuts = ref(false);
 const rightDrawerOpen = ref(settings.drawerOpen);
 const lessons = ref([]);
 const currentLessonIndex = ref(-1);

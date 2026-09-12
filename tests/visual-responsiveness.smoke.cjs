@@ -82,6 +82,7 @@ app.whenReady().then(async () => {
     await evaluate(`document.querySelector('.lesson-item').click()`);
     await waitFor(`Boolean(document.querySelector('.sentence-item'))`);
     await evaluate(`document.querySelector('[aria-label="暂停"]').click()`);
+    await new Promise((r) => setTimeout(r, 250));
 
     // --- TEST DESIGN TOKENS ---
     console.log('2. Verifying unified design tokens (radius, active state)...');

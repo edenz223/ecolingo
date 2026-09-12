@@ -306,13 +306,16 @@ button:focus-visible,
 
 .glass-drawer .lesson-item--active,
 .q-item.lesson-item--active,
-.lesson-item--active,
-.lesson-item--active .q-item__label {
+.lesson-item--active {
   color: var(--active-ink) !important;
   background: var(--active-bg) !important;
   border-color: var(--active-border) !important;
   box-shadow: var(--active-shadow);
   font-weight: 600;
+}
+
+.lesson-item--active .q-item__label {
+  color: var(--active-ink) !important;
 }
 
 .q-menu .q-list {

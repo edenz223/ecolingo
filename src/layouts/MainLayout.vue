@@ -267,6 +267,10 @@ function toggleFocusMode() {
   playbackRateMenuVisible.value = false;
   focusMode.value = !focusMode.value;
 }
+
+watch(focusMode, (val) => {
+  window.fileAPI?.setFocusMode?.(val);
+});
 const zenFirstAttempt = ref(settings.practiceMethod === 'attempt');
 const zenPhase = ref('idle');
 let zenSession = 0;
@@ -369,6 +373,10 @@ function handleScrollPointer(event) {
 }
 
 function handleKeyDown(event) {
+  if (event.code === 'Escape' && focusMode.value) {
+    focusMode.value = false;
+    return;
+  }
   if (recordingError.value || event.target.closest('input, textarea, select, button, [role="switch"], [role="slider"], [contenteditable="true"]') || event.altKey || event.metaKey) return;
   if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.code)) pauseFollowing();
   if (!player.sound.value && !['KeyQ', 'KeyE', 'KeyR'].includes(event.code)) return;
@@ -424,6 +432,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (focusMode.value) {
+    window.fileAPI?.setFocusMode?.(false);
+  }
   clearTimeout(noSpeechNoticeTimer);
   window.removeEventListener('keydown', handleKeyDown);
   window.removeEventListener('pointerdown', handleScrollPointer);

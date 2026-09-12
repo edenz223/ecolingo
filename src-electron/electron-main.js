@@ -61,6 +61,18 @@ ipcMain.handle('recordings:identity', (event, lesson) => lessonIdentity(lesson))
 ipcMain.handle('recordings:list', async (event, lessonId) => (await getRecordingStore()).list(lessonId));
 ipcMain.handle('recordings:save', async (event, meta, bytes) => (await getRecordingStore()).save(meta, bytes));
 ipcMain.handle('recordings:read', async (event, id) => (await getRecordingStore()).read(id));
+ipcMain.handle('window:setFocusMode', (event, isFocus) => {
+  if (!mainWindow) return;
+  if (platform === 'win32') {
+    if (isFocus) {
+      mainWindow.setTitleBarOverlay({ color: '#00000000', symbolColor: '#00000000', height: 0 });
+    } else {
+      mainWindow.setTitleBarOverlay({ color: '#00000000', symbolColor: '#5c6b77', height: 34 });
+    }
+  } else if (platform === 'darwin') {
+    mainWindow.setWindowButtonVisibility(!isFocus);
+  }
+});
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
 

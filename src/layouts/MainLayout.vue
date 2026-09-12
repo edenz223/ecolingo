@@ -365,19 +365,6 @@ function resumeFollowing() {
 }
 
 function handleScrollPointer(event) {
-  const panel = document.getElementById('sentences');
-  if (panel) {
-    const rect = panel.getBoundingClientRect();
-    if (
-      event.clientX >= rect.right - 18 &&
-      event.clientX <= rect.right + 2 &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom
-    ) {
-      pauseFollowing();
-      return;
-    }
-  }
   if (event.clientX >= document.documentElement.clientWidth) pauseFollowing();
 }
 
@@ -1344,28 +1331,14 @@ function releaseRecordingResources() {
   backdrop-filter: blur(18px) saturate(135%);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(69, 103, 136, 0.25) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .sentences-panel::-webkit-scrollbar {
-  width: 8px;
-}
-
-.sentences-panel::-webkit-scrollbar-track {
-  background: transparent;
-  margin: 10px 0;
-}
-
-.sentences-panel::-webkit-scrollbar-thumb {
-  background-color: rgba(69, 103, 136, 0.22);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.sentences-panel::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(69, 103, 136, 0.4);
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .sentences-panel .q-list {

@@ -86,7 +86,7 @@
           <div class="text-grey-7">选择包含音频和字幕的文件夹</div>
           <q-btn unelevated color="primary" icon="folder_open" label="打开课程文件夹" :loading="lessonLoading" @click="openFolder" />
         </div>
-        <div v-if="focusMode" class="zen-stage">
+        <div v-else-if="focusMode" class="zen-stage">
           <div class="zen-neighbor" aria-hidden="true">{{ zenNeighbor(-1) }}</div>
           <Transition name="zen-sentence" mode="out-in">
             <div :key="player.currentSentence.value?.start" class="zen-current">{{ player.currentSentence.value?.text }}</div>

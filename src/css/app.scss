@@ -112,7 +112,6 @@ body,
 
 .glass-header,
 .glass-footer,
-.glass-drawer,
 .q-menu,
 .q-dialog .q-card {
   color: var(--ink-strong);
@@ -201,14 +200,32 @@ body,
   height: 30px;
 }
 
+.q-drawer {
+  background: transparent !important;
+}
+
 .glass-drawer {
+  color: var(--ink-strong);
+  background: rgba(255, 255, 255, 0.28) !important;
   border-left: 1px solid var(--glass-border) !important;
+  box-shadow: -6px 0 28px rgba(47, 74, 104, 0.04), inset 1px 0 0 rgba(255, 255, 255, 0.5) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
 }
 
 .glass-drawer .q-drawer__content,
 .glass-drawer .q-scrollarea,
+.glass-drawer .q-scrollarea__content,
 .glass-drawer .q-list {
-  background: transparent;
+  background: transparent !important;
+}
+
+.glass-drawer .q-item-label--header {
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 16px 16px 8px 16px;
 }
 
 .glass-footer {

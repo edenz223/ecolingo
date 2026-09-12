@@ -1421,7 +1421,7 @@ function releaseRecordingResources() {
 }
 
 .q-drawer--fixed {
-  box-shadow: -12px 0 42px rgba(47, 74, 104, 0.11) !important;
+  box-shadow: none !important;
 }
 
 .lesson-item {

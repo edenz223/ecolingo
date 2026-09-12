@@ -1215,16 +1215,16 @@ function releaseRecordingResources() {
   .zen-sentence-enter-active, .zen-sentence-leave-active { transition: none; }
 }
 .lesson-empty {
-  min-height: 55vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: clamp(10px, 2vh, 16px);
   text-align: center;
-  max-width: 520px;
+  max-width: 480px;
+  width: 100%;
   margin: auto;
-  padding: 56px 32px;
+  padding: clamp(26px, 4.5vh, 44px) 32px;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.24));
   border: 1px solid var(--glass-border);
   border-radius: 28px;
@@ -1248,12 +1248,13 @@ function releaseRecordingResources() {
 
 .lesson-empty > .q-icon {
   display: grid;
-  width: 76px;
-  height: 76px;
+  width: 66px;
+  height: 66px;
+  font-size: 40px !important;
   place-items: center;
   background: rgba(255, 255, 255, 0.42);
   border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 22px;
+  border-radius: 20px;
   box-shadow: 0 12px 30px rgba(39, 119, 211, 0.12), inset 0 1px rgba(255, 255, 255, 0.82);
 }
 

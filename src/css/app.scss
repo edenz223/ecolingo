@@ -82,6 +82,11 @@ html {
   background: transparent !important;
 }
 
+.learning-page {
+  display: flex;
+  flex-direction: column;
+}
+
 .glass-header,
 .glass-footer,
 .glass-drawer,

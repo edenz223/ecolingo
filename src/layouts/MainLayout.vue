@@ -178,8 +178,8 @@
           </button>
           <q-btn v-if="shadowingMode" flat no-caps :label="'练习方式：' + practiceMethods.find(method => method.id === practiceMethod).label"
             class="glass-action" icon-right="expand_more" aria-label="选择练习方式">
-            <q-menu anchor="top right" self="bottom right">
-              <q-list class="practice-menu">
+            <q-menu class="practice-menu" anchor="top right" self="bottom right">
+              <q-list>
                 <q-item-label header>选择接下来的练习流程</q-item-label>
                 <q-item v-for="method in practiceMethods" :key="method.id" clickable v-close-popup
                   :active="practiceMethod === method.id" @click="selectPracticeMethod(method.id)">
@@ -1310,16 +1310,20 @@ function releaseRecordingResources() {
 
 .sentence-item.sentence-preview,
 .sentence-preview {
-  background: rgba(184, 220, 255, 0.36);
-  box-shadow: inset -3px 0 var(--accent), 0 8px 24px rgba(39, 119, 211, 0.08);
+  color: var(--active-ink);
+  background: rgba(184, 220, 255, 0.32);
+  border-color: var(--active-border);
+  box-shadow: inset -3px 0 var(--accent), var(--active-shadow);
 }
 
 .sentences-panel {
-  margin: 10px 16px 30px;
+  margin: 10px auto 30px;
+  max-width: 980px;
+  width: calc(100% - 32px);
   background: rgba(255, 255, 255, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  border-radius: 24px;
-  box-shadow: var(--glass-shadow);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
   -webkit-backdrop-filter: blur(18px) saturate(135%);
   backdrop-filter: blur(18px) saturate(135%);
 }
@@ -1330,25 +1334,32 @@ function releaseRecordingResources() {
 }
 
 .sentence-item {
-  min-height: 64px;
+  min-height: 60px;
   color: var(--ink);
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.65;
   border: 1px solid transparent;
-  border-radius: 15px;
+  border-radius: var(--radius-lg);
   transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .sentence-item:hover {
-  background: rgba(255, 255, 255, 0.38);
-  border-color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.65);
 }
 
 .sentence-item.sentence-item--active {
-  color: #1d5792;
-  background: rgba(184, 220, 255, 0.36);
-  border-color: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 8px 24px rgba(39, 119, 211, 0.08), inset 0 1px rgba(255, 255, 255, 0.66);
+  color: var(--active-ink);
+  background: var(--active-bg);
+  border-color: var(--active-border);
+  box-shadow: var(--active-shadow);
+  font-weight: 600;
+}
+
+.sentence-item:focus-visible,
+.lesson-item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
 .playback-toolbar {
@@ -1366,9 +1377,9 @@ function releaseRecordingResources() {
   gap: 12px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.34);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  border-radius: 999px;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.7), 0 8px 24px rgba(47, 74, 104, 0.08);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
 }
 
 .transport-button {
@@ -1390,16 +1401,25 @@ function releaseRecordingResources() {
 }
 
 .lesson-item {
+  margin: 3px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
   font-size: 14px;
   line-height: 1.45;
-  transition: background-color 0.3s;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.lesson-item:hover {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.54);
 }
 
 .lesson-item--active {
-  color: #1d5792;
-  background: rgba(184, 220, 255, 0.38) !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.7);
-  font-weight: 650;
+  color: var(--active-ink) !important;
+  background: var(--active-bg) !important;
+  border-color: var(--active-border) !important;
+  box-shadow: var(--active-shadow);
+  font-weight: 600;
 }
 
 .small-tooltip {
@@ -1459,9 +1479,9 @@ function releaseRecordingResources() {
   min-height: 46px;
   padding: 5px;
   background: rgba(255, 255, 255, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 16px;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 .practice-controls { grid-column: 1; grid-row: 1; justify-self: start; }

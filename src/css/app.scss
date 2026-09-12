@@ -7,10 +7,30 @@
   --glass: rgba(255, 255, 255, 0.52);
   --glass-strong: rgba(255, 255, 255, 0.72);
   --glass-soft: rgba(255, 255, 255, 0.34);
-  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.65);
   --glass-shadow: 0 12px 36px rgba(47, 74, 104, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.78);
   --glass-blur: blur(24px) saturate(145%);
   --accent: #2777d3;
+
+  // Unified Design System Tokens
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 4px 16px rgba(47, 74, 104, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --shadow-md: 0 8px 24px rgba(47, 74, 104, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --shadow-lg: 0 16px 42px rgba(47, 74, 104, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+
+  --active-ink: #1d5792;
+  --active-bg: rgba(184, 220, 255, 0.38);
+  --active-border: rgba(255, 255, 255, 0.76);
+  --active-shadow: 0 6px 20px rgba(39, 119, 211, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+
+  --focus-ring: 2px solid rgba(39, 119, 211, 0.68);
+  --focus-offset: 2px;
+
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   --font-display: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   --text-body: 15px;
@@ -175,7 +195,8 @@ html {
 .q-dialog .q-card {
   overflow: hidden;
   border: 1px solid var(--glass-border);
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg) !important;
 }
 
 .q-btn,
@@ -210,7 +231,7 @@ html {
   place-items: center;
   background: rgba(193, 0, 21, 0.1);
   border: 1px solid rgba(193, 0, 21, 0.12);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
 }
 
 .q-dialog__backdrop {
@@ -221,15 +242,16 @@ html {
 
 .q-tooltip {
   color: var(--ink-strong);
-  background: rgba(247, 251, 255, 0.84);
+  background: rgba(247, 251, 255, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.82);
-  box-shadow: 0 8px 24px rgba(35, 58, 82, 0.16);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   backdrop-filter: blur(14px) saturate(140%);
 }
 
 .q-btn:not(.q-btn--round) {
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 .q-btn:not(.q-btn--round)::before {
@@ -266,9 +288,11 @@ html {
 
 .q-btn:focus-visible,
 .q-item:focus-visible,
-.ios-switch-control:focus-visible {
-  outline: 2px solid rgba(39, 119, 211, 0.62);
-  outline-offset: 2px;
+.ios-switch-control:focus-visible,
+button:focus-visible,
+.titlebar-menu-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
 .q-btn--standard.q-btn--actionable,
@@ -277,7 +301,18 @@ html {
 }
 
 .q-item {
-  border-radius: 13px;
+  border-radius: var(--radius-md);
+}
+
+.glass-drawer .lesson-item--active,
+.q-item.lesson-item--active,
+.lesson-item--active,
+.lesson-item--active .q-item__label {
+  color: var(--active-ink) !important;
+  background: var(--active-bg) !important;
+  border-color: var(--active-border) !important;
+  box-shadow: var(--active-shadow);
+  font-weight: 600;
 }
 
 .q-menu .q-list {
@@ -287,13 +322,22 @@ html {
 .q-menu .q-item {
   min-height: 42px;
   margin: 2px 0;
-  transition: background-color 160ms ease, color 160ms ease;
+  border: 1px solid transparent;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
-.q-menu .q-item:hover,
+.q-menu .q-item:hover {
+  color: var(--active-ink);
+  background: rgba(184, 220, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
 .q-menu .q-item--active {
-  color: #1d5792;
-  background: rgba(184, 220, 255, 0.34);
+  color: var(--active-ink);
+  background: var(--active-bg);
+  border-color: var(--active-border);
+  box-shadow: var(--active-shadow);
+  font-weight: 600;
 }
 
 .q-menu .q-item__label--caption,

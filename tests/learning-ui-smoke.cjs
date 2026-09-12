@@ -29,7 +29,7 @@ fs.writeFileSync(preload, `
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1100, height: 800,
     frame: true, resizable: true, maximizable: true, thickFrame: true,
-    titleBarStyle: 'hidden', titleBarOverlay: { color: '#00ffffff', symbolColor: '#5c6b77', height: 34 },
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#5c6b77', height: 34 },
     webPreferences: { preload, sandbox: false, contextIsolation: true, webSecurity: false, backgroundThrottling: false, offscreen: true } });
   win.webContents.setAudioMuted(true);
   const evaluate = (source) => win.webContents.executeJavaScript(source);

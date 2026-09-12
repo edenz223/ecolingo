@@ -76,10 +76,11 @@ app.whenReady().then(async () => {
     await waitFor(`document.querySelector('[aria-label="播放速度"]').textContent.includes('1.25')`);
     assert.equal(await evaluate(`Boolean(document.querySelector('[aria-label="音量"], [aria-label="静音"], [aria-label="取消静音"]'))`), false);
     await evaluate(`document.querySelector('.q-page').click()`);
-    const scrollBefore = await evaluate(`window.scrollY`);
-    await evaluate(`window.scrollBy(0, 240);
+    const scrollBefore = await evaluate(`document.querySelector('#sentences').scrollTop`);
+    await evaluate(`
+      document.querySelector('#sentences').scrollTop += 240;
       document.querySelector('#sentences').dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 50 }))`);
-    await waitFor(`window.scrollY > ${scrollBefore}`);
+    await waitFor(`document.querySelector('#sentences').scrollTop > ${scrollBefore}`);
     await waitFor(`document.querySelector('.lesson-heading').textContent.includes('回到当前句')`);
     await evaluate(`document.querySelector('.lesson-heading .follow-btn').click()`);
     await waitFor(`!document.querySelector('.lesson-heading').textContent.includes('回到当前句')`);

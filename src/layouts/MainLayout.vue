@@ -365,6 +365,19 @@ function resumeFollowing() {
 }
 
 function handleScrollPointer(event) {
+  const panel = document.getElementById('sentences');
+  if (panel) {
+    const rect = panel.getBoundingClientRect();
+    if (
+      event.clientX >= rect.right - 18 &&
+      event.clientX <= rect.right + 2 &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom
+    ) {
+      pauseFollowing();
+      return;
+    }
+  }
   if (event.clientX >= document.documentElement.clientWidth) pauseFollowing();
 }
 
@@ -1318,15 +1331,41 @@ function releaseRecordingResources() {
 }
 
 .sentences-panel {
-  margin: 10px auto 30px;
+  flex: 0 1 auto;
+  max-height: 100%;
+  margin: auto;
   max-width: 980px;
-  width: calc(100% - 32px);
+  width: 100%;
   background: rgba(255, 255, 255, 0.3);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   -webkit-backdrop-filter: blur(18px) saturate(135%);
   backdrop-filter: blur(18px) saturate(135%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(69, 103, 136, 0.25) transparent;
+}
+
+.sentences-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sentences-panel::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 10px 0;
+}
+
+.sentences-panel::-webkit-scrollbar-thumb {
+  background-color: rgba(69, 103, 136, 0.22);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.sentences-panel::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(69, 103, 136, 0.4);
 }
 
 .sentences-panel .q-list {

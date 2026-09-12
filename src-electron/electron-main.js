@@ -77,12 +77,6 @@ function createWindow() {
     minHeight: 520,
     show: false,
     frame: true,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#00ffffff',
-      symbolColor: '#5c6b77',
-      height: 34,
-    },
     resizable: true,
     maximizable: true,
     fullscreenable: true,
@@ -102,8 +96,6 @@ function createWindow() {
       // More info: https://v2.quasar.dev/quasar-cli-vite/developing-electron-apps/electron-preload-script
       preload: path.resolve(__dirname, process.env.QUASAR_ELECTRON_PRELOAD),
     },
-    autoHideMenuBar: true,
-    menuBarVisible: false,
   });
 
   if (platform === 'win32') mainWindow.setMaximizable(true);

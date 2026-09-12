@@ -29,7 +29,6 @@ fs.writeFileSync(preload, `
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1100, height: 800,
     frame: true, resizable: true, maximizable: true, thickFrame: true,
-    titleBarStyle: 'hidden', titleBarOverlay: { color: '#00ffffff', symbolColor: '#5c6b77', height: 34 },
     webPreferences: { preload, sandbox: false, contextIsolation: true, webSecurity: false, backgroundThrottling: false, offscreen: true } });
   win.webContents.setAudioMuted(true);
   const evaluate = (source) => win.webContents.executeJavaScript(source);
@@ -50,10 +49,6 @@ app.whenReady().then(async () => {
     assert.equal(win.isMaximized(), true);
     win.unmaximize();
     await waitFor(`window.innerWidth === ${initialWindowWidth}`);
-    assert.equal(await evaluate(`document.querySelector('.q-layout').classList.contains('windows-titlebar')`), true);
-    assert.ok(Math.abs(await evaluate(`document.querySelector('.system-titlebar').getBoundingClientRect().height`) - 34) < 1);
-    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.system-titlebar')).webkitAppRegion`), 'drag');
-    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.system-titlebar button')).webkitAppRegion`), 'no-drag');
     assert.equal(await evaluate(`Boolean(document.querySelector('.glass-header [aria-label="显示或隐藏课程列表"]'))`), true);
     assert.equal(await evaluate(`Boolean(document.querySelector('.glass-footer [aria-label="显示或隐藏课程列表"]'))`), false);
     await evaluate(`document.querySelector('.glass-header [aria-label="显示或隐藏课程列表"]').click()`);

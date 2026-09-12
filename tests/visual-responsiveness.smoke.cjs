@@ -152,6 +152,19 @@ app.whenReady().then(async () => {
 
     fs.writeFileSync(path.join(temp, 'ui-600x520.png'), (await win.webContents.capturePage()).toPNG());
 
+    // Verify 600x520 drawer backdrop transparency and hover-only tooltip
+    const toggleBtn = `document.querySelector('.top-sidebar-toggle')`;
+    await evaluate(`${toggleBtn}.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))`);
+    assert.equal(await evaluate(`Boolean(document.querySelector('.q-tooltip'))`), false, 'Tooltip must not show without hover delay');
+    await evaluate(`${toggleBtn}.click()`);
+    await waitFor(`Boolean(document.querySelector('.q-drawer__backdrop'))`);
+    await waitFor(`!document.querySelector('.q-tooltip')`);
+    assert.equal(await evaluate(`Boolean(document.querySelector('.q-tooltip'))`), false, 'Tooltip must disappear immediately on click');
+
+    const backdropBg = await evaluate(`getComputedStyle(document.querySelector('.q-drawer__backdrop')).backgroundColor`);
+    assert.equal(backdropBg, 'rgba(0, 0, 0, 0)', 'Drawer backdrop must be completely transparent (no grey filter)');
+    fs.writeFileSync(path.join(temp, 'ui-600x520-drawer-open.png'), (await win.webContents.capturePage()).toPNG());
+
     // --- TEST 850px CRITICAL BREAKPOINT ---
     console.log('4. Testing 850px breakpoint transitions...');
     win.setSize(840, 600);

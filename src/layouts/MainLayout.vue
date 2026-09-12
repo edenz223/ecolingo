@@ -21,12 +21,12 @@
           icon="my_location" label="回到当前句" class="follow-btn" @click="resumeFollowing" />
         <q-btn flat round dense class="top-action top-sidebar-toggle" size="sm"
           aria-label="显示或隐藏课程列表" :aria-expanded="rightDrawerOpen"
-          @click="rightDrawerOpen = !rightDrawerOpen">
+          @click="toggleDrawer">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
             <rect x="3" y="4" width="18" height="16" rx="2" />
             <path d="M16 4v16" />
           </svg>
-          <q-tooltip class="small-tooltip">显示或隐藏课程列表</q-tooltip>
+          <q-tooltip ref="drawerTooltipRef" :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">显示或隐藏课程列表</q-tooltip>
         </q-btn>
       </div>
     </q-header>
@@ -110,7 +110,7 @@
                   :color="previewClipId === recordings[s.start].id ? 'primary' : undefined"
                   :aria-label="previewClipId === recordings[s.start].id ? '停止回放' : '播放此句最新录音'"
                   @click.stop="playUserRecording(s.start)">
-                  <q-tooltip class="small-tooltip">{{ previewClipId === recordings[s.start].id ? '停止回放' : '播放此句录音' }}</q-tooltip>
+                  <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">{{ previewClipId === recordings[s.start].id ? '停止回放' : '播放此句录音' }}</q-tooltip>
                 </q-btn>
               </q-item-section>
             </q-item>
@@ -149,7 +149,7 @@
       <q-toolbar class="wrap playback-toolbar">
         <div class="sentence-navigation">
         <q-btn flat round class="transport-button" icon="skip_previous" aria-label="上一句" :disable="!player.currentSentence.value" @click="beforeSentence">
-          <q-tooltip class="small-tooltip">上一句 · A</q-tooltip>
+          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">上一句 · A</q-tooltip>
         </q-btn>
         <q-btn round unelevated color="primary" size="lg" class="primary-play" :disable="!player.currentSentence.value"
           :aria-label="player.isShadowing.value || (player.sound.value && player.sound.value.playing()) ? '暂停' : '播放'"
@@ -157,14 +157,14 @@
           ? 'pause'
           : 'play_arrow'
           " @click="togglePlay">
-          <q-tooltip class="small-tooltip">{{
+          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">{{
             player.isShadowing.value || (player.sound.value && player.sound.value.playing())
               ? "暂停"
               : "播放"
           }} · 空格</q-tooltip>
         </q-btn>
         <q-btn flat round class="transport-button" icon="skip_next" aria-label="下一句" :disable="!player.currentSentence.value" @click="nextSentence">
-          <q-tooltip class="small-tooltip">下一句 · D</q-tooltip>
+          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">下一句 · D</q-tooltip>
         </q-btn>
         </div>
 
@@ -174,7 +174,7 @@
             :disabled="!player.sound.value" @click="toggleShadowingMode">
             <span class="ios-switch" aria-hidden="true"><span class="ios-switch__thumb" /></span>
             <span>跟读</span>
-            <q-tooltip class="small-tooltip">{{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S</q-tooltip>
+            <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">{{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S</q-tooltip>
           </button>
           <q-btn v-if="shadowingMode" flat no-caps :label="'练习方式：' + practiceMethods.find(method => method.id === practiceMethod).label"
             class="glass-action" icon-right="expand_more" aria-label="选择练习方式">
@@ -197,20 +197,20 @@
         <div class="playback-options">
         <q-btn flat round :icon="focusMode ? 'fullscreen_exit' : 'fullscreen'" :aria-label="focusMode ? '退出专注显示' : '专注显示'"
           :aria-pressed="focusMode" :disable="!player.currentSentence.value" @click="toggleFocusMode">
-          <q-tooltip>{{ focusMode ? '退出专注显示' : '专注显示' }}</q-tooltip>
+          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100">{{ focusMode ? '退出专注显示' : '专注显示' }}</q-tooltip>
         </q-btn>
         <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
           :color="player.repeatOne.value ? 'light-blue-4' : undefined" :disable="!player.sound.value"
           :aria-label="player.repeatOne.value ? '关闭单句循环' : '开启单句循环'" :aria-pressed="player.repeatOne.value"
           @click="player.repeatOne.value = !player.repeatOne.value">
-          <q-tooltip class="small-tooltip">{{
+          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">{{
             player.repeatOne.value ? '关闭单句循环' : '开启单句循环'
             }}</q-tooltip>
         </q-btn>
 
         <!-- Add this new button for playback rate control -->
           <q-btn flat dense :label="currentPlaybackRate + 'x'" class="playback-rate-control" aria-label="播放速度" :disable="!player.sound.value">
-          <q-tooltip>播放速度 · C / X 调整，Z 重置</q-tooltip>
+          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100">播放速度 · C / X 调整，Z 重置</q-tooltip>
           <q-menu v-model="playbackRateMenuVisible" anchor="top right" self="bottom right" :offset="[10, 0]"
             class="q-pa-sm">
             <q-list dense>
@@ -237,6 +237,12 @@ const settings = loadSettings();
 const isWindows = window.fileAPI?.platform === 'win32';
 const showShortcuts = ref(false);
 const rightDrawerOpen = ref(settings.drawerOpen);
+const drawerTooltipRef = ref(null);
+
+function toggleDrawer() {
+  drawerTooltipRef.value?.hide();
+  rightDrawerOpen.value = !rightDrawerOpen.value;
+}
 const lessons = ref([]);
 const currentLessonIndex = ref(-1);
 const followSentence = ref(true);
@@ -420,6 +426,13 @@ function handleKeyDown(event) {
   }
 }
 
+function handleGlobalPointerDown(e) {
+  const target = e.target?.closest?.('button, .q-btn, [role="button"], [role="switch"]');
+  if (target) {
+    target.dispatchEvent(new MouseEvent('mouseleave'));
+  }
+}
+
 onMounted(() => {
   loadLocalLessons();
 
@@ -429,6 +442,7 @@ onMounted(() => {
 
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('pointerdown', handleScrollPointer);
+  window.addEventListener('pointerdown', handleGlobalPointerDown, true);
 });
 
 onUnmounted(() => {
@@ -438,6 +452,7 @@ onUnmounted(() => {
   clearTimeout(noSpeechNoticeTimer);
   window.removeEventListener('keydown', handleKeyDown);
   window.removeEventListener('pointerdown', handleScrollPointer);
+  window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
   player.releaseLesson();
   releaseRecordingResources();
 });

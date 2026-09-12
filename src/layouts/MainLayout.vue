@@ -1197,12 +1197,14 @@ function releaseRecordingResources() {
 </script>
 <style>
 .zen-stage {
+  width: 100%;
+  max-width: 980px;
+  box-sizing: border-box;
   min-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 48px;
-  max-width: 1100px;
   margin: auto;
   padding: 32px 24px 80px;
   text-align: center;

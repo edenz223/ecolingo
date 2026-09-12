@@ -238,7 +238,19 @@ app.whenReady().then(async () => {
     })()`);
     assert.ok(focusRuleCheck.hasFocusRingToken, '--focus-ring CSS token must be defined');
     assert.ok(focusRuleCheck.hasFocusVisibleRule, ':focus-visible CSS rules must cover buttons');
-    fs.writeFileSync(path.join(temp, 'ui-focus-visible.png'), (await win.webContents.capturePage()).toPNG());
+    // --- TEST FOCUS MODE CARD STABILITY ---
+    console.log('8. Testing focus mode card stability across sentence lengths...');
+    await evaluate(`document.querySelector('[aria-label="专注显示"]').click()`);
+    await waitFor(`Boolean(document.querySelector('.zen-stage'))`);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const zenWidth1 = await evaluate(`document.querySelector('.zen-stage').getBoundingClientRect().width`);
+    await evaluate(`document.querySelector('[aria-label="下一句"]').click()`);
+    await new Promise((r) => setTimeout(r, 200));
+    const zenWidth2 = await evaluate(`document.querySelector('.zen-stage').getBoundingClientRect().width`);
+    assert.ok(Math.abs(zenWidth1 - zenWidth2) < 1, `Focus mode card width must be stable across sentences (got ${zenWidth1} vs ${zenWidth2})`);
+    assert.ok(zenWidth1 <= 982, 'Focus mode card max-width must be constrained to <=980px');
+    fs.writeFileSync(path.join(temp, 'ui-focus-mode.png'), (await win.webContents.capturePage()).toPNG());
 
     console.log('ALL VISUAL & RESPONSIVENESS TESTS PASSED!');
     console.log('Screenshots generated in: ' + temp);

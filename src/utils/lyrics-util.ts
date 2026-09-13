@@ -1,6 +1,8 @@
-export function parseLRC(lrcContent) {
+import type { Sentence } from '../types/subtitles';
+
+export function parseLRC(lrcContent: string): Sentence[] {
   const lines = lrcContent.split('\n');
-  const sentences = [];
+  const sentences: Sentence[] = [];
 
   lines.forEach((line) => {
     const match = line.trim().match(/^\[(\d{2}):(\d{2}\.\d{2,3})\](.*)$/);
@@ -21,22 +23,27 @@ export function parseLRC(lrcContent) {
   return sentences;
 }
 
-export function parseSRT(content) {
+export function parseSRT(content: string): Sentence[] {
   const blocks = content.trim().split(/\r?\n\r?\n/);
-  return blocks.map((block) => {
-    const [id, time, ...textLines] = block.split(/\r?\n/);
+  const sentences: Sentence[] = [];
+  for (const block of blocks) {
+    const [, time, ...textLines] = block.split(/\r?\n/);
+    if (!time || !time.includes(' --> ')) continue;
     const [startTime, endTime] = time.split(' --> ').map(timeToSeconds);
-    return {
+    const text = textLines.join(' ');
+    if (isEntireSentenceBracketed(text)) continue;
+    sentences.push({
       start: startTime,
       end: endTime,
-      text: textLines.join(' '),
-    };
-  }).filter((sentence) => !isEntireSentenceBracketed(sentence.text));
+      text,
+    });
+  }
+  return sentences;
 }
 
-export function isEntireSentenceBracketed(text) {
+export function isEntireSentenceBracketed(text: string): boolean {
   const value = text.trim();
-  const pairs = {
+  const pairs: Record<string, string> = {
     '(': ')',
     '（': '）',
     '[': ']',
@@ -49,7 +56,7 @@ export function isEntireSentenceBracketed(text) {
   const closingBrackets = new Set(Object.values(pairs));
   if (!pairs[value[0]] || value.at(-1) !== pairs[value[0]]) return false;
 
-  const stack = [];
+  const stack: string[] = [];
   for (let index = 0; index < value.length; index++) {
     const character = value[index];
     if (pairs[character]) {
@@ -62,7 +69,7 @@ export function isEntireSentenceBracketed(text) {
   return stack.length === 0;
 }
 
-function timeToSeconds(timeString) {
+function timeToSeconds(timeString: string): number {
   const [hours, minutes, seconds] = timeString.split(':');
   return (
     parseFloat(hours) * 3600 +

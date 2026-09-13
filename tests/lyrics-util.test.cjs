@@ -4,9 +4,14 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '../src/utils/lyrics-util.js'), 'utf8');
-const scope = {};
-vm.runInNewContext(source.replaceAll('export function', 'function'), scope);
+const esbuild = require('esbuild');
+
+const raw = fs.readFileSync(path.join(__dirname, '../src/utils/lyrics-util.ts'), 'utf8');
+const source = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
+const scope = { exports: {}, module: {} };
+scope.module.exports = scope.exports;
+vm.runInNewContext(source, scope);
+Object.assign(scope, scope.module.exports);
 
 test('LRC omits sentences fully enclosed by common brackets', () => {
   const sentences = scope.parseLRC([

@@ -3,11 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '../src/utils/settings.js'), 'utf8')
-  .replaceAll('export function', 'function');
+const esbuild = require('esbuild');
+const raw = fs.readFileSync(path.join(__dirname, '../src/utils/settings.ts'), 'utf8');
+const source = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
 function session(storage) {
-  const scope = { localStorage: storage };
+  const scope = { localStorage: storage, exports: {}, module: {} };
+  scope.module.exports = scope.exports;
   vm.runInNewContext(source, scope);
+  Object.assign(scope, scope.module.exports);
   return scope;
 }
 

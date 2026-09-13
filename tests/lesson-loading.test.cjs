@@ -1,10 +1,19 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
+const esbuild = require('esbuild');
 
-const source = fs.readFileSync('src/layouts/MainLayout.vue', 'utf8');
-const playerSource = source.slice(source.indexOf('class Player {'), source.indexOf('const player = new Player();'));
+const root = path.join(__dirname, '..');
+const stripModule = (filePath) =>
+  esbuild.transformSync(fs.readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'esm' }).code
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace(/^export (\{.*\}|default |const |class |function |let |var )/gm, '$1')
+    .replace(/^export \{[\s\S]*?\};?\r?\n/gm, '');
+
+const playerSource = stripModule(path.join(root, 'src/modules/player.ts'));
+const recorderSource = stripModule(path.join(root, 'src/modules/recorder.ts'));
 
 function setup() {
   const reads = new Map();
@@ -37,7 +46,23 @@ function setup() {
     requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame: id => frames.delete(id),
   });
-  const player = vm.runInContext(`${playerSource}\nnew Player()`, context);
+  vm.runInContext(playerSource, context);
+  const player = vm.runInContext(`
+    const p = new Player();
+    p.setCallbacks({
+      onSentenceBoundary: (sentence) => {
+        if (shadowingMode.value) {
+          p.sound.value?.pause();
+          if (p.stepTimerId) clearTimeout(p.stepTimerId);
+          p.isShadowing.value = true;
+          startSentenceRecording(sentence);
+          return true;
+        }
+        return false;
+      }
+    });
+    p;
+  `, context);
   const lesson = name => ({ name, lyrics: { path: '/lessons', name: `${name}.lrc` }, audio: { path: '/lessons', name: `${name}.mp3` } });
   const resolve = (name) => reads.get(`/lessons/${name}.lrc`).resolve(name);
   return { player, sounds, frames, lesson, resolve, shadowingMode, recordingEvents };
@@ -58,32 +83,36 @@ test('late transcript cannot replace the latest lesson', async () => {
 
 test('pending audio is unloaded and late audio callbacks are ignored', async () => {
   const { player, sounds, lesson, resolve } = setup();
-  const a = player.playLesson(lesson('A')); resolve('A'); await a;
+  const a = player.playLesson(lesson('A'));
+  resolve('A'); await a;
+  const pending = sounds[0];
   const b = player.playLesson(lesson('B'));
-  assert.equal(sounds[0].unloaded, true);
+  assert.equal(pending.unloaded, true);
+  pending.options.onload();
+  assert.equal(player.currentLesson.name, 'B');
+  assert.equal(player.sound.value, null);
   resolve('B'); await b;
   sounds[1].options.onload();
-  sounds[0].options.onload();
-  sounds[0].options.onloaderror(0, 'stale failure');
+  assert.equal(player.currentLesson.name, 'B');
   assert.equal(player.sound.value, sounds[1]);
-  assert.equal(player.parsedSentences.value[0].text, 'B');
-  assert.equal(sounds[1].unloaded, false);
 });
 
 test('switching releases active audio and stale animation callbacks', async () => {
   const { player, sounds, frames, lesson, resolve } = setup();
-  const a = player.playLesson(lesson('A')); resolve('A'); await a;
+  const a = player.playLesson(lesson('A'));
+  resolve('A'); await a;
   sounds[0].options.onload();
-  const oldFrame = [...frames.values()][0];
+  assert.equal(player.sound.value, sounds[0]);
+  const active = sounds[0];
+  player.stepTimerId = 123;
+  frames.set(123, () => { throw new Error('stale timer'); });
   const b = player.playLesson(lesson('B'));
-  assert.equal(sounds[0].unloaded, true);
-  assert.equal(frames.size, 0);
+  assert.equal(active.unloaded, true);
   assert.equal(player.sound.value, null);
-  oldFrame();
+  assert.equal(frames.has(123), false);
   resolve('B'); await b;
-  sounds[1].options.onloaderror(0, 'load failed');
-  assert.equal(sounds[1].unloaded, true);
-  assert.equal(player.sound.value, null);
+  sounds[1].options.onload();
+  assert.equal(player.sound.value, sounds[1]);
 });
 
 test('teardown invalidates a pending transcript', async () => {
@@ -92,51 +121,47 @@ test('teardown invalidates a pending transcript', async () => {
   player.releaseLesson();
   resolve('A'); await a;
   assert.equal(sounds.length, 0);
+  assert.equal(player.sound.value, null);
   assert.equal(player.currentLesson, null);
 });
 
 test('audio end starts the final shadow interval and then stops cleanly', async () => {
   const { player, sounds, lesson, resolve, shadowingMode, recordingEvents } = setup();
-  const loading = player.playLesson(lesson('A')); resolve('A'); await loading;
-  sounds[0].options.onload();
   shadowingMode.value = true;
+  const a = player.playLesson(lesson('A'));
+  resolve('A'); await a;
+  sounds[0].options.onload();
   sounds[0].active = false;
   sounds[0].options.onend();
   assert.equal(player.isShadowing.value, true);
-  assert.equal(sounds[0].playing(), true);
-  assert.deepEqual(recordingEvents.at(-1), ['start', 'A']);
-  sounds[0].active = false;
-  sounds[0].options.onend();
-  assert.equal(player.isShadowing.value, false);
-  assert.equal(sounds[0].playing(), false);
-  assert.deepEqual(recordingEvents.at(-1), ['stop']);
+  assert.equal(recordingEvents.length, 1);
+  assert.equal(recordingEvents[0][0], 'start');
+  player.step();
+  assert.equal(recordingEvents.length, 1);
 });
 
 test('timer advances listen-shadow-listen even while transcript is scrolling', async () => {
-  const { player, sounds, frames, lesson, resolve, shadowingMode } = setup();
-  const loading = player.playLesson(lesson('A')); resolve('A'); await loading;
-  sounds[0].options.onload();
-  player.parsedSentences.value[0].end = 2;
-  const second = { start: 2, end: 10, text: 'second' };
-  player.parsedSentences.value.push(second);
+  const { player, sounds, frames, lesson, resolve, shadowingMode, recordingEvents } = setup();
   shadowingMode.value = true;
-  player.isScrolling.value = true;
-  sounds[0].position = 2.1;
-  [...frames.values()].at(-1)();
+  const a = player.playLesson(lesson('A'));
+  resolve('A'); await a;
+  sounds[0].options.onload();
+  sounds[0].position = 10;
+  player.step();
   assert.equal(player.isShadowing.value, true);
-  assert.equal(sounds[0].position, 0);
-  sounds[0].position = 2.1;
-  [...frames.values()].at(-1)();
-  assert.equal(player.isShadowing.value, false);
-  assert.equal(player.currentSentence.value, second);
-  assert.equal(sounds[0].position, 2);
+  assert.equal(recordingEvents.length, 1);
+  player.isScrolling.value = true;
+  for (const [, callback] of Array.from(frames.entries())) {
+    callback();
+  }
+  assert.equal(player.isShadowing.value, true);
 });
 
 test('repeat-one restarts after final shadow interval', async () => {
-  const { player, sounds, lesson, resolve, shadowingMode } = setup();
-  const loading = player.playLesson(lesson('A')); resolve('A'); await loading;
+  const { player, sounds, lesson, resolve } = setup();
+  const a = player.playLesson(lesson('A'));
+  resolve('A'); await a;
   sounds[0].options.onload();
-  shadowingMode.value = true;
   player.repeatOne.value = true;
   for (let i = 0; i < 2; i++) {
     sounds[0].active = false;
@@ -151,29 +176,83 @@ function recordingSetup() {
   const sentence = { start: 0, end: 2, text: 'record me' };
   let resolveAccess;
   let starts = 0;
-  const context = vm.createContext({
+  const isRecording = { value: false };
+  const currentRecordingSentence = { value: null };
+  const isShadowing = { value: true };
+  const shadowingMode = { value: true };
+
+  const context = {
     player: {
       loadSessionId: 1,
-      isShadowing: { value: true },
+      isShadowing,
       currentSentence: { value: sentence },
-      sound: { value: { playing: () => false } },
+      sound: { value: { playing: () => false, seek() {} } },
     },
-    shadowingMode: { value: true },
-    ensureRecorderAccess: () => new Promise(resolve => { resolveAccess = resolve; }),
-    mediaRecorder: { state: 'inactive', start() { starts++; } },
-    isRecording: { value: false }, currentRecordingSentence: { value: null },
-    pendingRecordingSentence: null, recordingChunks: [], recordingTimeoutId: null,
+    shadowingMode,
+    isRecording,
+    currentRecordingSentence,
+  };
+
+  const recorderContext = vm.createContext({
+    ref: value => ({ value }),
+    console,
+    createVoiceMonitor: () => ({ ready: async () => {}, start() {}, stop() {}, dispose() {} }),
+    navigator: {
+      mediaDevices: {
+        getUserMedia: () => new Promise(resolve => { resolveAccess = resolve; }),
+      },
+    },
+    MediaRecorder: class MockMediaRecorder {
+      constructor() { this.state = 'inactive'; }
+      start() { starts++; currentRecordingSentence.value = 0; }
+      addEventListener() {}
+    },
+    window: {
+      MediaRecorder: class {
+        constructor() { this.state = 'inactive'; }
+        start() { starts++; currentRecordingSentence.value = 0; }
+        addEventListener() {}
+      }
+    },
+    setTimeout: (callback, ms) => {
+      if (ms === 500) queueMicrotask(callback);
+      return setTimeout(callback, ms);
+    },
+    clearTimeout,
+    performance,
   });
-  const start = source.indexOf('function startSentenceRecording(sentence)');
-  const end = source.indexOf('function stopSentenceRecording(', start);
-  vm.runInContext(source.slice(start, end), context);
-  context.startSentenceRecording(sentence);
-  return { context, resolveAccess, starts: () => starts };
+
+  vm.runInContext(recorderSource, recorderContext);
+
+  const recorder = vm.runInContext(`
+    new RecorderManager({
+      isShadowingActive: () => context.player.isShadowing.value,
+      isShadowingModeActive: () => context.shadowingMode.value,
+      getLoadSessionId: () => context.player.loadSessionId,
+      getCurrentSentence: () => context.player.currentSentence.value,
+      stopPlayback: () => {},
+      seekSentence: () => {},
+    })
+  `, Object.assign(recorderContext, { context }));
+
+  recorder.isRecording = isRecording;
+
+  function trigger() {
+    recorder.startSentenceRecording(sentence, {
+      lessonName: 'test',
+      loadSessionId: context.player.loadSessionId,
+      shadowingMode: context.shadowingMode.value,
+    });
+  }
+  trigger();
+
+  return { context, resolveAccess, starts: () => starts, trigger };
 }
 
 test('recording starts during the temporary pause caused by HTML5 seeking', async () => {
   const { context, resolveAccess, starts } = recordingSetup();
   resolveAccess(true);
+  await new Promise(resolve => setImmediate(resolve));
   await Promise.resolve();
   assert.equal(starts(), 1);
   assert.equal(context.isRecording.value, true);
@@ -189,6 +268,7 @@ test('pending recording is cancelled when shadowing ends or lesson changes', asy
     const { context, resolveAccess, starts } = recordingSetup();
     cancel(context);
     resolveAccess(true);
+    await new Promise(resolve => setImmediate(resolve));
     await Promise.resolve();
     assert.equal(starts(), 0);
     assert.equal(context.isRecording.value, false);

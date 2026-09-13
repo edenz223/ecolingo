@@ -227,10 +227,9 @@
 </template>
 <script setup>
 import { onMounted, ref, onUnmounted, watch } from "vue";
-import { parseLRC, parseSRT } from '../utils/lyrics-util';
-import { Howl } from "howler";
-import { createVoiceMonitor } from '../utils/voice-activity';
-import { createZenCompletion } from '../utils/zen-flow';
+import { Player } from '../modules/player';
+import { RecorderManager } from '../modules/recorder';
+import { ZenCoordinator, practiceMethods } from '../modules/zen';
 import { loadSettings, saveSettings } from '../utils/settings';
 
 const settings = loadSettings();
@@ -249,24 +248,131 @@ const followSentence = ref(true);
 const lessonLoading = ref(false);
 
 const shadowingMode = ref(settings.shadowing);
-const zenMode = ref(settings.shadowing && settings.practiceMethod !== 'listen');
 const focusMode = ref(false);
-const practiceMethod = ref(settings.practiceMethod);
-const practiceMethods = [
-  { id: 'listen', label: '先听后读', flow: '听原声 → 跟读' },
-  { id: 'replay', label: '听读回听', flow: '听原声 → 跟读 → 听自己' },
-  { id: 'attempt', label: '先读再听', flow: '先尝试 → 听原声 → 再跟读 → 听自己' },
-];
+const playbackRateMenuVisible = ref(false);
+const currentPlaybackRate = ref(settings.playbackRate);
+const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
+
+const player = new Player({
+  playbackRate: currentPlaybackRate,
+  repeatOne: ref(settings.repeatOne),
+});
+
+const recorder = new RecorderManager();
+
+const zen = new ZenCoordinator(
+  player,
+  recorder,
+  shadowingMode,
+  settings.practiceMethod,
+  settings.practiceMethod === 'attempt'
+);
+
+const zenMode = zen.zenMode;
+const practiceMethod = zen.practiceMethod;
+const zenFirstAttempt = zen.zenFirstAttempt;
+const zenPhase = zen.zenPhase;
+
+const isRecording = recorder.isRecording;
+const recordingError = recorder.recordingError;
+const recordingVoiceActive = recorder.recordingVoiceActive;
+const recordingStatus = recorder.recordingStatus;
+const recordings = recorder.recordings;
+const noSpeechSentence = recorder.noSpeechSentence;
+const previewClipId = recorder.previewClipId;
+const pendingSaves = recorder.pendingSaves;
+
+recorder.setCallbacks({
+  isShadowingActive: () => player.isShadowing.value,
+  isShadowingModeActive: () => shadowingMode.value,
+  getLoadSessionId: () => player.loadSessionId,
+  getCurrentSentence: () => player.currentSentence.value,
+  seekSentence: (start) => player.sound.value?.seek(start),
+  stopPlayback: () => player.stopCurrentPlayback(),
+  advanceSentence: () => {
+    player.isShadowing.value = false;
+    player.advanceSentence();
+  },
+  onRecordingComplete: (completion, meta, blob) => {
+    zen.completeZenRecording(completion, meta, blob);
+  },
+});
+
+player.setCallbacks({
+  onLoadingChange: (loading) => {
+    lessonLoading.value = loading;
+  },
+  onError: (msg) => {
+    recorder.recordingError.value = msg;
+  },
+  onSentenceChange: (sentence) => {
+    if (focusMode.value || !followSentence.value || !sentence) return;
+    const element = document.getElementById(sentence.start.toString());
+    element?.scrollIntoView({
+      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'center',
+    });
+  },
+  onSentenceBoundary: (sentence) => {
+    if (zenMode.value && zenPhase.value === 'reference') {
+      player.sound.value?.pause();
+      if (player.stepTimerId) {
+        clearTimeout(player.stepTimerId);
+        player.stepTimerId = null;
+      }
+      zenPhase.value = 'second';
+      player.isShadowing.value = true;
+      startSentenceRecording(sentence);
+      return true;
+    }
+    if (shadowingMode.value && !zenMode.value) {
+      if (!player.isShadowing.value) {
+        player.sound.value?.pause();
+        if (player.stepTimerId) {
+          clearTimeout(player.stepTimerId);
+          player.stepTimerId = null;
+        }
+        player.isShadowing.value = true;
+        startSentenceRecording(sentence);
+        return true;
+      }
+    }
+    return false;
+  },
+  onPlayLessonStart: async (lesson, sessionId) => {
+    followSentence.value = true;
+    const lessonId = await window.fileAPI.recordingIdentity(JSON.parse(JSON.stringify(lesson)));
+    if (sessionId !== player.loadSessionId) return;
+    recorder.activeLessonId = lessonId;
+    await recorder.refreshRecordings(lessonId, sessionId);
+  },
+  onStopPlayback: () => {
+    zen.resetSession();
+    recorder.stopPreview();
+    recorder.clearNoSpeechNotice();
+    stopSentenceRecording(true);
+    if (zenMode.value) recorder.releaseRecordingResources();
+  },
+  onReleaseLesson: () => recorder.releaseRecordingResources(),
+  isZenReferencePlaying: () =>
+    zenMode.value && zenPhase.value === 'reference' && Boolean(player.sound.value?.playing()),
+  onTogglePlay: () => togglePlay(),
+  handleZenClick: (sentence, forcePlay, wasPlayingZenReference) => {
+    if (zenMode.value && (forcePlay || wasPlayingZenReference)) {
+      zen.playZenReference(sentence);
+      return true;
+    }
+    if (zenMode.value) {
+      return true;
+    }
+    return false;
+  },
+  stopPreview: () => recorder.stopPreview(),
+});
 
 function selectPracticeMethod(method) {
-  if (!shadowingMode.value || !player.sound.value || !practiceMethods.some(item => item.id === method)) return;
-  player.stopCurrentPlayback();
-  releaseRecordingResources();
   playbackRateMenuVisible.value = false;
-  player.sound.value.seek(player.currentSentence.value.start);
-  practiceMethod.value = method;
-  zenMode.value = shadowingMode.value && method !== 'listen';
-  zenFirstAttempt.value = method === 'attempt';
+  zen.selectPracticeMethod(method);
 }
 
 function toggleFocusMode() {
@@ -277,93 +383,15 @@ function toggleFocusMode() {
 watch(focusMode, (val) => {
   window.fileAPI?.setFocusMode?.(val);
 });
-const zenFirstAttempt = ref(settings.practiceMethod === 'attempt');
-const zenPhase = ref('idle');
-let zenSession = 0;
 
 function zenNeighbor(offset) {
   const sentences = player.parsedSentences;
   return sentences.value[sentences.value.indexOf(player.currentSentence.value) + offset]?.text || '';
 }
 
-function startZenSentence() {
-  if (!player.currentSentence.value) return;
-  clearNoSpeechNotice();
-  if (!zenFirstAttempt.value) {
-    playZenReference(player.currentSentence.value);
-    return;
-  }
-  zenPhase.value = 'first';
-  player.isShadowing.value = true;
-  player.sound.value.seek(player.currentSentence.value.start);
-  startSentenceRecording(player.currentSentence.value);
-}
-
-function playZenReference(sentence) {
-  zenPhase.value = 'reference';
-  player.isShadowing.value = false;
-  player.sound.value.seek(sentence.start);
-  player.sound.value.play();
-}
-
-const completeZenRecording = createZenCompletion({
-  isCurrent: (completion) => zenMode.value && completion.zenSession === zenSession &&
-    completion.sessionId === player.loadSessionId && completion.sentence === player.currentSentence.value,
-  playReference: playZenReference,
-  setPhase: (phase) => { zenPhase.value = phase; },
-  save: saveRecording,
-  preview: previewRecording,
-  advance: (sentence) => {
-      const next = player.repeatOne.value ? sentence : player.getNextSentence();
-      if (!next) {
-        player.stopCurrentPlayback();
-        releaseRecordingResources();
-        return;
-      }
-      player.currentSentence.value = next;
-      startZenSentence();
-  },
-  stop: () => player.stopCurrentPlayback(),
-});
-const pendingSaves = new Set();
-const recordings = ref({});
-const isRecording = ref(false);
-const recordingError = ref("");
-let noSpeechNoticeTimer = null;
-const noSpeechSentence = ref(null);
-
-function clearNoSpeechNotice() {
-  clearTimeout(noSpeechNoticeTimer);
-  noSpeechNoticeTimer = null;
-  noSpeechSentence.value = null;
-}
-
 function closeRecordingError() {
-  recordingError.value = '';
+  recorder.closeRecordingError();
 }
-let mediaRecorder = null;
-let mediaStream = null;
-let recordingChunks = [];
-let voiceMonitor = null;
-let recordingAttempt = 0;
-let recordingStartedAt = 0;
-let completedShadow = null;
-const recordingStatus = ref('');
-const recordingVoiceActive = ref(false);
-let pendingRecordingSentence = null;
-let recorderInitPromise = null;
-let discardNextRecording = false;
-let previewAudio = null;
-let previewUrl = null;
-let previewSession = 0;
-const previewClipId = ref(null);
-let activeLessonId = null;
-let microphoneSession = 0;
-
-// Add these new refs and constants
-const playbackRateMenuVisible = ref(false);
-const currentPlaybackRate = ref(settings.playbackRate);
-const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 
 function pauseFollowing() {
   followSentence.value = false;
@@ -408,19 +436,15 @@ function handleKeyDown(event) {
   if (event.code === 'KeyE' && !event.target.closest('input, textarea')) {
     next();
   }
-  // Key C to add 0.1 rate
   if (event.code === 'KeyC' && !event.target.closest('input, textarea')) {
     setPlaybackRate((parseFloat(currentPlaybackRate.value) + 0.1).toFixed(2));
   }
-  // Key V to subtract 0.1 rate
   if (event.code === 'KeyX' && !event.target.closest('input, textarea')) {
     setPlaybackRate((parseFloat(currentPlaybackRate.value) - 0.1).toFixed(2));
   }
-  // Key Z to reset playback rate to 1
   if (event.code === 'KeyZ' && !event.target.closest('input, textarea')) {
     setPlaybackRate(1);
   }
-  // Control + KeyR to reload the page
   if (event.code === 'KeyR' && event.ctrlKey) {
     location.reload();
   }
@@ -436,7 +460,7 @@ function handleGlobalPointerDown(e) {
 onMounted(() => {
   loadLocalLessons();
 
-  window.fileAPI.onFolderSelected((event, values) => {
+  window.fileAPI?.onFolderSelected((event, values) => {
     handleOpenFolderResult(values);
   });
 
@@ -449,309 +473,13 @@ onUnmounted(() => {
   if (focusMode.value) {
     window.fileAPI?.setFocusMode?.(false);
   }
-  clearTimeout(noSpeechNoticeTimer);
+  recorder.clearNoSpeechNotice();
   window.removeEventListener('keydown', handleKeyDown);
   window.removeEventListener('pointerdown', handleScrollPointer);
   window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
   player.releaseLesson();
-  releaseRecordingResources();
+  recorder.releaseRecordingResources();
 });
-
-class Player {
-  constructor() {
-    this.loadSessionId = 0;
-    this.pendingSound = null;
-    this.stepTimerId = null;
-    this.sound = ref(null);
-    this.currentLesson = null;
-    this.currentSentence = ref(null);
-    this.parsedSentences = ref([]);
-    this.isScrolling = ref(false);
-    this.currentPause = null;
-    this.repeatOne = ref(settings.repeatOne);
-    this.isShadowing = ref(false);
-    this.playbackRate = currentPlaybackRate;
-  }
-
-  async playLesson(lesson) {
-    this.releaseLesson();
-    lessonLoading.value = true;
-    followSentence.value = true;
-    const sessionId = this.loadSessionId;
-    this.currentLesson = lesson;
-    const lyricsPath = lesson.lyrics.path + "/" + lesson.lyrics.name;
-    const audioFilePath = lesson.audio.path + "/" + lesson.audio.name;
-
-    try {
-      const lessonId = await window.fileAPI.recordingIdentity(JSON.parse(JSON.stringify(lesson)));
-      if (sessionId !== this.loadSessionId) return;
-      activeLessonId = lessonId;
-      await refreshRecordings(lessonId, sessionId);
-      if (sessionId !== this.loadSessionId) return;
-      const content = await window.fileAPI.readTextFile(lyricsPath);
-      if (sessionId !== this.loadSessionId) return;
-      const sentences = lyricsPath.endsWith('.srt')
-        ? parseSRT(content)
-        : parseLRC(content);
-      if (!sentences.length) throw new Error('字幕中没有可用的句子，请检查字幕文件。');
-      this.initializeSound(audioFilePath, sentences, sessionId);
-    } catch (error) {
-      if (sessionId === this.loadSessionId) {
-        lessonLoading.value = false;
-        console.error('Error:', error);
-        recordingError.value = error.message;
-      }
-    }
-  }
-
-  releaseLesson() {
-    lessonLoading.value = false;
-    this.loadSessionId++;
-    this.stopCurrentPlayback();
-    releaseRecordingResources();
-    activeLessonId = null;
-    recordings.value = {};
-    clearTimeout(this.stepTimerId);
-    this.stepTimerId = null;
-    this.pendingSound?.unload();
-    this.pendingSound = null;
-    this.sound.value?.unload();
-    this.sound.value = null;
-    this.currentLesson = null;
-    this.currentSentence.value = null;
-    this.parsedSentences.value = [];
-    this.isScrolling.value = false;
-    if (previewAudio) {
-      previewAudio.pause();
-      previewAudio = null;
-    }
-  }
-
-  initializeSound(audioFilePath, sentences, sessionId) {
-      const sound = new Howl({
-        preload: false,
-        src: [audioFilePath],
-        html5: true,
-        format: ["mp3", "wav", "ogg", "aac", "flac", "m4a"],
-        rate: this.playbackRate.value,
-        onload: () => {
-          if (sessionId !== this.loadSessionId) return;
-          lessonLoading.value = false;
-          sentences[sentences.length - 1].end = sound.duration();
-          this.pendingSound = null;
-          this.sound.value = sound;
-          this.parsedSentences.value = sentences;
-          this.clickSentence(sentences[0]);
-        },
-        onloaderror: (id, error) => {
-          if (sessionId !== this.loadSessionId) return;
-          lessonLoading.value = false;
-          recordingError.value = '课程音频无法打开，请检查文件是否存在且可以播放。';
-          this.pendingSound = null;
-          sound.unload();
-          console.error('Error:', error);
-        },
-        onplay: () => {
-          if (sessionId === this.loadSessionId) this.scheduleStep();
-        },
-        onplayerror: () => {
-          if (sessionId !== this.loadSessionId) return;
-          this.stopCurrentPlayback();
-          recordingError.value = '原声无法播放，请检查音频文件后重试。';
-        },
-        onend: () => {
-          if (sessionId === this.loadSessionId) this.step(true);
-        },
-      });
-      this.pendingSound = sound;
-      sound.load();
-  }
-
-  scheduleStep() {
-    clearTimeout(this.stepTimerId);
-    const sessionId = this.loadSessionId;
-    this.stepTimerId = setTimeout(() => {
-      if (sessionId !== this.loadSessionId) return;
-      this.stepTimerId = null;
-      this.step();
-    }, 20);
-  }
-
-  togglePlay() {
-    if (zenMode.value) {
-      if (zenPhase.value !== 'idle') this.stopCurrentPlayback();
-      else startZenSentence();
-      return;
-    }
-    stopPreview();
-    if (this.sound.value.playing() || this.isShadowing.value) {
-      const sentence = this.currentSentence.value;
-      const wasShadowing = this.isShadowing.value;
-      this.stopCurrentPlayback();
-      if (wasShadowing) this.sound.value.seek(sentence.start);
-    } else {
-      this.sound.value.play();
-    }
-  }
-
-  step(ended = false) {
-    if (!this.sound.value || !this.currentSentence.value) return;
-    if (this.isShadowing.value) return;
-    if (!ended && !this.sound.value.playing()) return;
-
-    const currentTime = ended ? this.sound.value.duration() : this.sound.value.seek() || 0;
-    if (
-      this.currentSentence.value &&
-      currentTime >= this.currentSentence.value.end
-    ) {
-      if (zenMode.value && zenPhase.value === 'reference') {
-        this.sound.value.pause();
-        clearTimeout(this.stepTimerId);
-        this.stepTimerId = null;
-        zenPhase.value = 'second';
-        this.isShadowing.value = true;
-        startSentenceRecording(this.currentSentence.value);
-        return;
-      }
-      if (shadowingMode.value && !zenMode.value) {
-        if (!this.isShadowing.value) {
-          this.sound.value.pause();
-          clearTimeout(this.stepTimerId);
-          this.stepTimerId = null;
-          this.isShadowing.value = true;
-          startSentenceRecording(this.currentSentence.value);
-          return;
-        }
-      }
-
-      this.advanceSentence();
-      return;
-    }
-    let currentSentence = this.findCurrentSentence(currentTime);
-    if (currentSentence !== this.currentSentence.value) {
-      this.currentSentence.value = currentSentence;
-      this.handleSentenceChange(currentSentence);
-    }
-    return this.scheduleStep();
-  }
-
-  advanceSentence() {
-      if (this.repeatOne.value) {
-        this.sound.value.seek(this.currentSentence.value.start);
-        if (!this.sound.value.playing()) this.sound.value.play();
-        this.scheduleStep();
-        return;
-      }
-      const nextSentence = this.getNextSentence();
-      if (!nextSentence) {
-        this.sound.value.pause();
-        clearTimeout(this.stepTimerId);
-        this.stepTimerId = null;
-        return;
-      }
-      this.currentSentence.value = nextSentence;
-      this.sound.value.seek(nextSentence.start);
-      if (!this.sound.value.playing()) this.sound.value.play();
-      this.handleSentenceChange(nextSentence);
-      this.scheduleStep();
-      return;
-  }
-
-  findCurrentSentence(currentTime) {
-    const sentences = this.parsedSentences.value;
-
-    const currentSentence = sentences.find((sentence, index) => {
-      const prevEnd = index > 0 ? sentences[index - 1].end : 0;
-      return currentTime >= prevEnd && currentTime < sentence.end;
-    });
-
-    return currentSentence || sentences[0];
-  }
-
-  handleSentenceChange(sentence) {
-    if (focusMode.value) return;
-    if (!followSentence.value || !sentence) return;
-    const element = document.getElementById(sentence.start.toString());
-    element?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
-  }
-
-  getNextSentence() {
-    let currentIndex = this.parsedSentences.value.indexOf(
-      this.currentSentence.value
-    );
-    return this.parsedSentences.value[currentIndex + 1];
-  }
-
-  async clickSentence(sentence, forcePlay = false) {
-    if (!this.sound.value || !sentence) return;
-    const wasPlayingZenReference =
-      zenMode.value && zenPhase.value === 'reference' && this.sound.value.playing();
-    this.stopCurrentPlayback();
-    stopPreview();
-    this.currentSentence.value = sentence;
-    this.isShadowing.value = false;
-    this.sound.value.seek(sentence.start);
-    if (zenMode.value && (forcePlay || wasPlayingZenReference)) playZenReference(sentence);
-    else if (!zenMode.value) this.sound.value.play();
-    this.handleSentenceChange(sentence);
-  }
-
-  handleSentenceClick(sentence, event) {
-    if (event?.detail > 1) return;
-    return this.clickSentence(sentence);
-  }
-
-  doubleClickSentence(sentence) {
-    if (this.currentSentence.value === sentence && this.sound.value?.playing()) return;
-    return this.clickSentence(sentence, true);
-  }
-
-  stopCurrentPlayback() {
-    zenSession++;
-    zenPhase.value = 'idle';
-    stopPreview();
-    clearNoSpeechNotice();
-    clearTimeout(this.stepTimerId);
-    this.stepTimerId = null;
-    if (this.sound.value?.playing()) {
-      this.sound.value.pause();
-    }
-    if (this.currentPause) {
-      clearTimeout(this.currentPause);
-    }
-    stopSentenceRecording(true);
-    if (zenMode.value) releaseRecordingResources();
-    this.isShadowing.value = false;
-  }
-
-  sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-  isElementInViewport(el) {
-    var rect = el.getBoundingClientRect();
-    var viewportHeight =
-      window.innerHeight || document.documentElement.clientHeight;
-
-    var adjustedBottom = viewportHeight - 50;
-
-    return (
-      rect.top >= 0 &&
-      rect.left >= 0 &&
-      rect.bottom <= adjustedBottom &&
-      rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-    );
-  }
-
-  // Add this method to update playback rate
-  setPlaybackRate(rate) {
-    this.playbackRate.value = rate;
-    if (this.sound.value) {
-      this.sound.value.rate(rate);
-    }
-  }
-}
-
-const player = new Player();
 
 watch([currentPlaybackRate, shadowingMode, player.repeatOne, rightDrawerOpen, zenFirstAttempt, practiceMethod],
   ([playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod]) => {
@@ -766,8 +494,19 @@ function playLesson(index) {
 }
 
 function togglePlay() {
-  if (player.sound.value) {
-    player.togglePlay();
+  if (zenMode.value) {
+    if (zenPhase.value !== 'idle') player.stopCurrentPlayback();
+    else zen.startZenSentence();
+    return;
+  }
+  recorder.stopPreview();
+  if (player.sound.value?.playing() || player.isShadowing.value) {
+    const sentence = player.currentSentence.value;
+    const wasShadowing = player.isShadowing.value;
+    player.stopCurrentPlayback();
+    if (wasShadowing && sentence) player.sound.value?.seek(sentence.start);
+  } else {
+    player.sound.value?.play();
   }
 }
 
@@ -786,32 +525,18 @@ function handleOpenFolderResult(values) {
 }
 
 function beforeSentence() {
-  if (
-    player.parsedSentences.value[
-    player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
-    ]
-  ) {
-    clearTimeout(player.currentPause);
-    player.clickSentence(
-      player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) - 1
-      ]
-    );
+  const idx = player.parsedSentences.value.indexOf(player.currentSentence.value);
+  if (idx > 0) {
+    if (player.currentPause) clearTimeout(player.currentPause);
+    player.clickSentence(player.parsedSentences.value[idx - 1]);
   }
 }
 
 function nextSentence() {
-  if (
-    player.parsedSentences.value[
-    player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
-    ]
-  ) {
-    clearTimeout(player.currentPause);
-    player.clickSentence(
-      player.parsedSentences.value[
-      player.parsedSentences.value.indexOf(player.currentSentence.value) + 1
-      ]
-    );
+  const idx = player.parsedSentences.value.indexOf(player.currentSentence.value);
+  if (idx >= 0 && idx < player.parsedSentences.value.length - 1) {
+    if (player.currentPause) clearTimeout(player.currentPause);
+    player.clickSentence(player.parsedSentences.value[idx + 1]);
   }
 }
 
@@ -842,16 +567,18 @@ function next() {
 }
 
 function openFolder() {
-  window.fileAPI.openFolder();
+  window.fileAPI?.openFolder();
 }
 
 function toggleShadowingMode() {
   if (!player.sound.value) return;
   player.stopCurrentPlayback();
-  releaseRecordingResources();
+  recorder.releaseRecordingResources();
   shadowingMode.value = !shadowingMode.value;
   zenMode.value = shadowingMode.value && practiceMethod.value !== 'listen';
-  player.sound.value.seek(player.currentSentence.value.start);
+  if (player.currentSentence.value) {
+    player.sound.value.seek(player.currentSentence.value.start);
+  }
 }
 
 function setPlaybackRate(rate) {
@@ -860,339 +587,44 @@ function setPlaybackRate(rate) {
   player.setPlaybackRate(Math.min(4, Math.max(0.1, value)));
 }
 
-async function ensureRecorderAccess() {
-  if (typeof window === "undefined") {
-    recordingError.value = "录音仅支持桌面应用。";
-    return false;
-  }
-
-  if (recorderInitPromise) {
-    return recorderInitPromise;
-  }
-
-  if (mediaRecorder) {
-    return true;
-  }
-
-  const hasNavigator = typeof navigator !== "undefined";
-  if (
-    typeof window.MediaRecorder === "undefined" ||
-    !hasNavigator ||
-    !navigator.mediaDevices?.getUserMedia
-  ) {
-    recordingError.value = "当前环境不支持录音，请使用桌面应用。";
-    return false;
-  }
-
-  const accessSession = microphoneSession;
-  recorderInitPromise = navigator.mediaDevices
-    .getUserMedia({ audio: true })
-    .then(async (stream) => {
-      if (accessSession !== microphoneSession) {
-        stream.getTracks().forEach((track) => track.stop());
-        return false;
-      }
-      mediaStream = stream;
-      mediaRecorder = new MediaRecorder(stream);
-      const monitor = createVoiceMonitor(stream);
-      voiceMonitor = monitor;
-      await monitor.ready();
-      if (accessSession !== microphoneSession) return false;
-      mediaRecorder.addEventListener("dataavailable", handleRecorderData);
-      mediaRecorder.addEventListener("stop", handleRecorderStop);
-      recordingError.value = "";
-      return true;
-    })
-    .catch((error) => {
-      if (accessSession !== microphoneSession) return false;
-      if (player.isShadowing.value) {
-        player.stopCurrentPlayback();
-        player.sound.value?.seek(player.currentSentence.value.start);
-      }
-      releaseRecordingResources();
-      recordingError.value =
-        error?.name === 'NotAllowedError' ? '麦克风访问被拒绝，请在系统设置中允许使用麦克风后重试。' :
-          error?.name === 'NotFoundError' ? '未检测到麦克风，请连接麦克风后重试。' :
-            `无法访问麦克风：${error?.message || '请检查设备连接。'}`;
-      return false;
-    })
-    .finally(() => {
-      if (accessSession === microphoneSession) recorderInitPromise = null;
-    });
-
-  return recorderInitPromise;
-}
-
 function startSentenceRecording(sentence) {
-  clearNoSpeechNotice();
-  if (!sentence || (!shadowingMode.value && !zenMode.value)) {
-    return;
-  }
-
-  const sessionId = player.loadSessionId;
-  const maxMs = 10000;
-  const attempt = ++recordingAttempt;
-  recordingStatus.value = '正在准备麦克风…';
-  ensureRecorderAccess().then(async (ready) => {
-    if (attempt !== recordingAttempt) return;
-    if (!ready) {
-      player.stopCurrentPlayback();
-      player.sound.value?.seek(sentence.start);
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    if (
-      attempt !== recordingAttempt ||
-      !mediaRecorder ||
-      (!shadowingMode.value && !zenMode.value) ||
-      !player.isShadowing.value ||
-      player.loadSessionId !== sessionId ||
-      player.currentSentence.value !== sentence
-    ) {
-      return;
-    }
-
-    if (mediaRecorder.state === 'recording' || pendingRecordingSentence) {
-      player.stopCurrentPlayback();
-      player.sound.value?.seek(sentence.start);
-      recordingError.value = '上一段录音正在结束，请按播放重试。';
-      return;
-    }
-    stopPreview();
-
-    const duration =
-      Math.max((sentence.end ?? sentence.start) - sentence.start, 0) || 0;
-
-    pendingRecordingSentence = {
-      lessonId: activeLessonId,
-      lessonName: player.currentLesson.name,
-      start: sentence.start,
-      end: sentence.end,
-      text: sentence.text,
-      duration,
-    };
-
-    isRecording.value = true;
-    recordingChunks = [];
-    mediaRecorder.start();
-    recordingStartedAt = performance.now();
-    recordingError.value = '';
-    voiceMonitor.start(({ state, reason, voiceActive }) => {
-      if (attempt !== recordingAttempt) return;
-      recordingVoiceActive.value = Boolean(voiceActive);
-      recordingStatus.value = { waiting: '请开始跟读…', speaking: '正在录音…', silence: '等待说完：静音 1.2 秒后结束' }[state];
-      if (reason) finishShadowing(reason);
-    }, { maxMs });
-  }).catch((error) => {
-    if (attempt !== recordingAttempt) return;
-    player.stopCurrentPlayback();
-    player.sound.value?.seek(sentence.start);
-    releaseRecordingResources();
-    recordingError.value = `录音启动失败：${error.message}`;
+  recorder.startSentenceRecording(sentence, {
+    lessonName: player.currentLesson?.name || '',
+    loadSessionId: player.loadSessionId,
+    zenMode: zenMode.value,
+    zenPhase: zenPhase.value,
+    zenSession: zen.zenSession,
+    shadowingMode: shadowingMode.value,
   });
 }
 
 function finishShadowing(reason = 'manual') {
-  if (!isRecording.value || completedShadow) return;
-  if (reason === 'no-speech') {
-    player.stopCurrentPlayback();
-    player.sound.value?.seek(player.currentSentence.value.start);
-    noSpeechSentence.value = player.currentSentence.value.start;
-    noSpeechNoticeTimer = setTimeout(() => {
-      clearNoSpeechNotice();
-    }, 1000);
-    return;
-  }
-  completedShadow = { sessionId: player.loadSessionId, sentence: player.currentSentence.value,
-    zenSession, zenPhase: zenMode.value ? zenPhase.value : null };
-  recordingStatus.value = reason === 'limit' ? '已达到 10 秒录音上限，正在保存…' : '正在完成录音…';
-  stopSentenceRecording();
+  recorder.finishShadowing(reason, {
+    sessionId: player.loadSessionId,
+    sentence: player.currentSentence.value,
+    zenSession: zen.zenSession,
+    zenPhase: zenMode.value ? zenPhase.value : null,
+  });
 }
 
 function stopSentenceRecording(discard = false) {
-  recordingVoiceActive.value = false;
-  recordingAttempt++;
-  voiceMonitor?.stop();
-
-  if (discard) {
-    completedShadow = null;
-    recordingStatus.value = '';
-    discardNextRecording = true;
-  }
-
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop();
-    return;
-  }
-
-  if (discard) {
-    if (!pendingRecordingSentence) resetRecordingState();
-  }
+  recorder.stopSentenceRecording(discard);
 }
 
-function handleRecorderData(event) {
-  if (event.data && event.data.size > 0) {
-    recordingChunks.push(event.data);
-  }
-}
-
-function handleRecorderStop() {
-  voiceMonitor?.stop();
-  const completion = completedShadow;
-  completedShadow = null;
-
-  const shouldDiscard = discardNextRecording;
-  discardNextRecording = false;
-
-  if (
-    shouldDiscard ||
-    !pendingRecordingSentence ||
-    recordingChunks.length === 0
-  ) {
-    resetRecordingState();
-    if (!shouldDiscard && completion) player.stopCurrentPlayback();
-    return;
-  }
-
-  const blob = new Blob(recordingChunks, {
-    type: mediaRecorder?.mimeType || "audio/webm",
-  });
-
-  pendingRecordingSentence.duration = (performance.now() - recordingStartedAt) / 1000;
-  if (completion?.zenPhase) {
-    const meta = pendingRecordingSentence;
-    resetRecordingState();
-    completeZenRecording(completion, meta, blob);
-    return;
-  }
-  saveRecording(pendingRecordingSentence, blob);
-  resetRecordingState();
-  if (completion && completion.sessionId === player.loadSessionId &&
-      completion.sentence === player.currentSentence.value && player.isShadowing.value) {
-    player.isShadowing.value = false;
-    player.advanceSentence();
-  }
-}
-
-function saveRecording(meta, blob) {
-  const sessionId = player.loadSessionId;
-  const task = (async () => {
-    try {
-      const clip = await window.fileAPI.saveRecording({
-        lessonId: meta.lessonId, lessonName: meta.lessonName,
-        start: meta.start, end: meta.end, text: meta.text, mime: blob.type,
-      }, await blob.arrayBuffer());
-      if (sessionId === player.loadSessionId && meta.lessonId === activeLessonId) {
-        recordings.value = { ...recordings.value, [meta.start]: clip };
-      }
-      return clip;
-    } catch (error) {
-      recordingError.value = `录音保存失败：${error.message}`;
-      throw error;
-    }
-  })();
-  pendingSaves.add(task);
-  task.finally(() => pendingSaves.delete(task)).catch(() => {});
-  return task;
-}
-
-async function refreshRecordings(lessonId = activeLessonId, sessionId = player.loadSessionId) {
-  if (!lessonId) return;
-  const clips = await window.fileAPI.listRecordings(lessonId);
-  if (sessionId !== player.loadSessionId || lessonId !== activeLessonId) return;
-  const latest = {};
-  for (const clip of clips) {
-    if (!latest[clip.start]) latest[clip.start] = clip;
-  }
-  recordings.value = latest;
-}
-
-function resetRecordingState() {
-  recordingVoiceActive.value = false;
-  recordingStatus.value = '';
-  isRecording.value = false;
-  pendingRecordingSentence = null;
-  recordingChunks = [];
-  discardNextRecording = false;
-}
-
-function playUserRecording(sentenceStart) {
-  const clip = recordings.value[sentenceStart];
-  if (clip) previewRecording(clip);
+function previewRecording(clip, onComplete = null) {
+  return recorder.previewRecording(clip, onComplete);
 }
 
 function stopPreview() {
-  previewSession++;
-  previewClipId.value = null;
-  if (previewAudio) {
-    previewAudio.onended = null;
-    previewAudio.onerror = null;
-    previewAudio.pause();
-    previewAudio.removeAttribute('src');
-    previewAudio.load();
-    previewAudio = null;
-  }
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = null;
+  recorder.stopPreview();
 }
 
-async function previewRecording(clip, onComplete = null) {
-  if (previewClipId.value === clip.id) {
-    stopPreview();
-    return;
-  }
-  if (!onComplete) player.stopCurrentPlayback();
-  stopPreview();
-  previewClipId.value = clip.id;
-  const session = previewSession;
-  try {
-    const { bytes, mime } = await window.fileAPI.readRecording(clip.id);
-    if (session !== previewSession) return;
-    previewUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    previewAudio = new Audio(previewUrl);
-    previewAudio.onended = () => {
-      if (session === previewSession) {
-        stopPreview();
-        onComplete?.();
-      }
-    };
-    previewAudio.onerror = () => {
-      if (session !== previewSession) return;
-      stopPreview();
-      if (onComplete) player.stopCurrentPlayback();
-      recordingError.value = '录音无法播放，请检查录音文件是否完整。';
-    };
-    await previewAudio.play();
-  } catch (error) {
-    if (session === previewSession) {
-      stopPreview();
-      if (onComplete) player.stopCurrentPlayback();
-      recordingError.value = `录音播放失败：${error.message}`;
-    }
-  }
+function playUserRecording(sentenceStart) {
+  recorder.playUserRecording(sentenceStart);
 }
 
 function releaseRecordingResources() {
-  recordingAttempt++;
-  completedShadow = null;
-  voiceMonitor?.dispose();
-  voiceMonitor = null;
-  microphoneSession++;
-  recorderInitPromise = null;
-  stopPreview();
-  if (mediaRecorder) {
-    mediaRecorder.removeEventListener("dataavailable", handleRecorderData);
-    mediaRecorder.removeEventListener("stop", handleRecorderStop);
-    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    mediaRecorder = null;
-  }
-
-  if (mediaStream) {
-    mediaStream.getTracks().forEach((track) => track.stop());
-    mediaStream = null;
-  }
-  resetRecordingState();
+  recorder.releaseRecordingResources();
 }
 </script>
 <style>

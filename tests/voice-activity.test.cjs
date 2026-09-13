@@ -11,8 +11,12 @@ const settingsScope = {};
 const zenScope = {};
 vm.runInNewContext(fs.readFileSync(path.join(root, 'src/utils/zen-flow.js'), 'utf8')
   .replaceAll('export function', 'function'), zenScope);
-vm.runInNewContext(fs.readFileSync(path.join(root, 'src/utils/settings.js'), 'utf8')
-  .replaceAll('export function', 'function'), settingsScope);
+const esbuild = require('esbuild');
+const settingsRaw = fs.readFileSync(path.join(root, 'src/utils/settings.ts'), 'utf8');
+const settingsCompiled = esbuild.transformSync(settingsRaw, { loader: 'ts', format: 'cjs' }).code;
+const sModule = { exports: {} };
+vm.runInNewContext(settingsCompiled, { exports: sModule.exports, module: sModule });
+Object.assign(settingsScope, sModule.exports);
 
 function signal(options) {
   let now = 0;
@@ -82,11 +86,22 @@ test('sentence limits stop short takes and allow long takes beyond 30 seconds', 
   assert.equal(signal({ maxMs: 1000 })(0, 1000).reason, 'no-speech');
 });
 
+
 test('a delayed timer does not invent sustained speech', () => {
   const detect = detectorScope.createVoiceActivityDetector(0);
   assert.equal(detect(0.1, 7000).state, 'waiting');
   assert.equal(detect(0, 8000).reason, 'no-speech');
 });
+
+const stripModule = (filePath) =>
+  esbuild.transformSync(fs.readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'esm' }).code
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace(/^export (\{.*\}|default |const |class |function |let |var )/gm, '$1')
+    .replace(/^export \{[\s\S]*?\};?\r?\n/gm, '');
+
+const playerCode = stripModule(path.join(root, 'src/modules/player.ts'));
+const recorderCode = stripModule(path.join(root, 'src/modules/recorder.ts'));
+const zenCode = stripModule(path.join(root, 'src/modules/zen.ts'));
 
 const layout = fs.readFileSync(path.join(root, 'src/layouts/MainLayout.vue'), 'utf8')
   .split('<script setup>')[1].split('</script>')[0].replace(/^import .*;\r?\n/gm, '');
@@ -157,6 +172,9 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
     document: { getElementById: () => ({ scrollIntoView() { scrolls++; } }) },
   };
   vm.createContext(context);
+  vm.runInContext(playerCode, context);
+  vm.runInContext(recorderCode, context);
+  vm.runInContext(zenCode, context);
   vm.runInContext(layout + `
     globalThis.h = { player, shadowingMode, isRecording, recordingError, currentPlaybackRate,
       startSentenceRecording, finishShadowing, toggleShadowingMode,
@@ -165,7 +183,7 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
       toggleZenMode: () => selectPracticeMethod(zenMode.value ? 'listen' : 'attempt'),
       toggleZenFirstAttempt: (value) => selectPracticeMethod(value ? 'attempt' : 'replay'),
       releaseRecordingResources, pendingSaves };
-    activeLessonId = 'lesson';
+    recorder.activeLessonId = 'lesson';
   `, context);
   const { h } = context;
   const sentences = [{ start: 0, end: 1, text: 'one' }, { start: 1, end: 2, text: 'two' }];

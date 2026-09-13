@@ -8,20 +8,23 @@ EcoLingo 是一款桌面语言学习应用，使用本地音频和带时间轴�
 
 ## 技术栈与代码结构
 
-- Vue 3、JavaScript、Composition API（`<script setup>`）、Quasar 2、Quasar CLI with Vite。
+- Vue 3、TypeScript / JavaScript、Composition API（`<script setup>`）、Quasar 2、Quasar CLI with Vite。
 - Electron 提供桌面窗口、原生文件夹选择和文件系统访问。
 - Howler 负责课程播放；`MediaRecorder` 和 `getUserMedia` 负责麦克风录音。
-- `src/layouts/MainLayout.vue`：学习界面、`Player` 类、SRT 解析、快捷键、跟读和录音生命周期。播放改动从这里开始。
-- `src/utils/lyrics-util.js`：LRC 解析。
+- `src/layouts/MainLayout.vue`：学习界面视图、键盘快捷键与事件协调；核心播放与录音逻辑已拆分为独立模块。
+- `src/modules/player.ts`：`Player` 核心类，负责音频播放、20 ms 轮询时钟与句子同步。
+- `src/modules/recorder.ts`：麦克风录音、VAD 语音监控、自动停止与录音本地保存。
+- `src/modules/zen.ts`：Zen 跟读练习状态机（先听后读、听读回听、先读再听）。
+- `src/types/`：统一 TypeScript 类型定义（`subtitles.ts`、`settings.ts`、`recording.ts`、`file-api.ts`）。
+- `src/utils/lyrics-util.ts`：LRC 与 SRT 字幕解析。
+- `src/utils/settings.ts`：偏好设置加载与持久化。
 - `src-electron/electron-main.js`：窗口、菜单和 IPC。
-- `src-electron/electron-preload.js`：`window.fileAPI` 桥接（`openFolder`、`onFolderSelected`、`readTextFile`）。
+- `src-electron/electron-preload.ts`：强类型 `window.fileAPI` 桥接（`openFolder`、`onFolderSelected`、`readTextFile` 等）。
 - `src-electron/fileSystem.js`：音频/字幕配对，并用 `jschardet` 检测字幕编码。
 - `src/router/`：路由；`src/pages/IndexPage.vue` 仍是初始页面，不是学习界面。
 - `src/css/`：公共样式和 Quasar 主题变量。
 - `resources/`：手动检查用的音频和 LRC 示例。
 - `quasar.config.js`：构建和 Electron 打包配置。
-
-修改 `src-electron/player.js` 前先检查引用；实际播放器位于 `MainLayout.vue`。
 
 ## 开发命令
 

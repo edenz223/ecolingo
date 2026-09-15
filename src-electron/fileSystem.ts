@@ -1,50 +1,52 @@
-import fs from "fs";
-import path from "path";
-const jschardet = require("jschardet");
+import fs from 'fs';
+import path from 'path';
+import jschardet from 'jschardet';
 
-class FileStrategy {
-  isMatch(file) {
-    throw new Error("isMatch method must be implemented");
-  }
+export interface ProcessedLessonsResult {
+  completeLessons: any[];
+  incompleteLessons: string[];
+}
 
-  process(lesson, file) {
-    throw new Error("process method must be implemented");
-  }
+abstract class FileStrategy {
+  abstract isMatch(file: fs.Dirent): boolean;
+  abstract process(lesson: Record<string, any>, file: fs.Dirent): void;
 }
 
 class AudioFileStrategy extends FileStrategy {
-  isMatch(file) {
-    const audioExtensions = [".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a"];
+  isMatch(file: fs.Dirent): boolean {
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'];
     return audioExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
   }
 
-  process(lesson, file) {
+  process(lesson: Record<string, any>, file: fs.Dirent): void {
     lesson.audio = file;
   }
 }
 
 class LyricsFileStrategy extends FileStrategy {
-  isMatch(file) {
-    return file.name.endsWith(".lrc") || file.name.endsWith(".srt");
+  isMatch(file: fs.Dirent): boolean {
+    return file.name.endsWith('.lrc') || file.name.endsWith('.srt');
   }
 
-  process(lesson, file) {
+  process(lesson: Record<string, any>, file: fs.Dirent): void {
     lesson.lyrics = file;
   }
 }
 
 export class FileProcessor {
+  strategies: FileStrategy[];
+
   constructor() {
     this.strategies = [new AudioFileStrategy(), new LyricsFileStrategy()];
   }
 
-  processFolder(folderPath) {
+  processFolder(folderPath: string): ProcessedLessonsResult {
     const files = fs.readdirSync(folderPath, { withFileTypes: true });
     files
       .filter((file) => file.isFile())
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    const lessonMap = new Map();
+    const lessonMap = new Map<string, Record<string, any>>();
 
     for (const file of files) {
       const fileName = path.parse(file.name).name;
@@ -63,8 +65,8 @@ export class FileProcessor {
       }
     }
 
-    const incompleteLessons = [];
-    const completeLessons = [];
+    const incompleteLessons: string[] = [];
+    const completeLessons: any[] = [];
     for (const [name, lesson] of lessonMap) {
       if (!lesson.audio || !lesson.lyrics) {
         incompleteLessons.push(name);
@@ -76,11 +78,9 @@ export class FileProcessor {
     return { completeLessons, incompleteLessons };
   }
 
-  readTextFile(filePath) {
+  readTextFile(filePath: string): string {
     const content = fs.readFileSync(filePath);
-    const encoding = jschardet.detect(content, {
-      // detectEncodings: ["UTF-8", "Big5"],
-    });
+    const encoding = jschardet.detect(content);
     return new TextDecoder(encoding.encoding).decode(content);
   }
 }

@@ -26,6 +26,7 @@
     "@quasar/app-vite": "^1.8.0",
     "@types/howler": "^2.2.13",
     "@types/node": "^22.20.2",
+    "@types/sql.js": "^1.4.11",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
     "autoprefixer": "^10.4.2",

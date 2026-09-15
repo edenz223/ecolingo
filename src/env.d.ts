@@ -13,11 +13,14 @@ declare module '*.vue' {
   export default component;
 }
 
-declare module '*/voice-activity' {
-  export function createVoiceMonitor(stream: MediaStream): any;
-  export function createVoiceActivityDetector(start?: number, options?: any): any;
+declare module 'jschardet' {
+  export interface IDetectResult {
+    encoding: string;
+    confidence: number;
+  }
+  export function detect(buffer: Buffer | Uint8Array, options?: any): IDetectResult;
 }
 
-declare module '*/zen-flow' {
-  export function createZenCompletion(options: any): any;
+declare module 'quasar/wrappers' {
+  export function route<T>(fn: T): T;
 }

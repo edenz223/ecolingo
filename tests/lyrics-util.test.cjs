@@ -13,6 +13,47 @@ scope.module.exports = scope.exports;
 vm.runInNewContext(source, scope);
 Object.assign(scope, scope.module.exports);
 
+test('LRC skips empty and Unicode whitespace lyrics before computing boundaries', () => {
+  const sentences = scope.parseLRC([
+    '[00:00.00] \t',
+    '[00:01.00]你好 world',
+    '[00:02.00]',
+    '[00:03.00]\t \u00a0\u3000',
+    '[00:04.00]Next sentence',
+    '[00:05.00] ',
+  ].join('\r\n'));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sentences)), [
+    { start: 1, end: 4, text: '你好 world' },
+    { start: 4, text: 'Next sentence' },
+  ]);
+});
+
+test('SRT skips empty and whitespace cues while preserving valid cue times', () => {
+  const sentences = scope.parseSRT([
+    '1\n00:00:00,000 --> 00:00:01,000\n \t',
+    '2\n00:00:01,000 --> 00:00:02,000\n你好\nworld',
+    '3\n00:00:02,000 --> 00:00:03,000',
+    '4\n00:00:03,000 --> 00:00:04,000\n\u00a0\n\u3000',
+    '5\n00:00:04,000 --> 00:00:05,000\nNext sentence',
+    '6\n00:00:05,000 --> 00:00:06,000\n ',
+  ].join('\n\n').replace(/\n/g, '\r\n'));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sentences)), [
+    { start: 1, end: 2, text: '你好 world' },
+    { start: 4, end: 5, text: 'Next sentence' },
+  ]);
+});
+
+test('blank subtitles yield no usable sentences', () => {
+  for (const content of ['', ' \t\r\n\u3000']) {
+    assert.equal(scope.parseLRC(content).length, 0);
+    assert.equal(scope.parseSRT(content).length, 0);
+  }
+  assert.equal(scope.parseLRC('[00:01.00] \t\u3000').length, 0);
+  assert.equal(scope.parseSRT('1\n00:00:01,000 --> 00:00:02,000\n \t\u3000').length, 0);
+});
+
 test('LRC omits sentences fully enclosed by common brackets', () => {
   const sentences = scope.parseLRC([
     '[00:01.00]Keep me',

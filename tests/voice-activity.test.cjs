@@ -4,19 +4,19 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
-const detectorSource = fs.readFileSync(path.join(root, 'src/utils/voice-activity.js'), 'utf8');
-const detectorScope = {};
-vm.runInNewContext(detectorSource.replaceAll('export function', 'function'), detectorScope);
-const settingsScope = {};
-const zenScope = {};
-vm.runInNewContext(fs.readFileSync(path.join(root, 'src/utils/zen-flow.js'), 'utf8')
-  .replaceAll('export function', 'function'), zenScope);
 const esbuild = require('esbuild');
-const settingsRaw = fs.readFileSync(path.join(root, 'src/utils/settings.ts'), 'utf8');
-const settingsCompiled = esbuild.transformSync(settingsRaw, { loader: 'ts', format: 'cjs' }).code;
-const sModule = { exports: {} };
-vm.runInNewContext(settingsCompiled, { exports: sModule.exports, module: sModule });
-Object.assign(settingsScope, sModule.exports);
+
+function loadTsModule(filePath) {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  const compiled = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
+  const mod = { exports: {} };
+  vm.runInNewContext(compiled, { exports: mod.exports, module: mod });
+  return mod.exports;
+}
+
+const detectorScope = loadTsModule(path.join(root, 'src/utils/voice-activity.ts'));
+const settingsScope = loadTsModule(path.join(root, 'src/utils/settings.ts'));
+const zenScope = loadTsModule(path.join(root, 'src/utils/zen-flow.ts'));
 
 function signal(options) {
   let now = 0;
@@ -103,8 +103,10 @@ const playerCode = stripModule(path.join(root, 'src/modules/player.ts'));
 const recorderCode = stripModule(path.join(root, 'src/modules/recorder.ts'));
 const zenCode = stripModule(path.join(root, 'src/modules/zen.ts'));
 
-const layout = fs.readFileSync(path.join(root, 'src/layouts/MainLayout.vue'), 'utf8')
-  .split('<script setup>')[1].split('</script>')[0].replace(/^import .*;\r?\n/gm, '');
+const rawScript = fs.readFileSync(path.join(root, 'src/layouts/MainLayout.vue'), 'utf8')
+  .split(/<script setup.*?>/)[1].split('</script>')[0];
+const layout = esbuild.transformSync(rawScript, { loader: 'ts', format: 'esm' }).code
+  .replace(/^import .*;\r?\n/gm, '');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function setup({ deferredAccess = false, denied = false, saveFailure = false } = {}) {
   let access;

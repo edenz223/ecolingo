@@ -15,13 +15,16 @@ EcoLingo 是一款桌面语言学习应用，使用本地音频和带时间轴�
 - `src/modules/player.ts`：`Player` 核心类，负责音频播放、20 ms 轮询时钟与句子同步。
 - `src/modules/recorder.ts`：麦克风录音、VAD 语音监控、自动停止与录音本地保存。
 - `src/modules/zen.ts`：Zen 跟读练习状态机（先听后读、听读回听、先读再听）。
-- `src/types/`：统一 TypeScript 类型定义（`subtitles.ts`、`settings.ts`、`recording.ts`、`file-api.ts`）。
+- `src/types/`：统一 TypeScript 类型定义（`subtitles.ts`、`settings.ts`、`recording.ts`、`file-api.ts`、`vad.ts`）。
 - `src/utils/lyrics-util.ts`：LRC 与 SRT 字幕解析。
 - `src/utils/settings.ts`：偏好设置加载与持久化。
-- `src-electron/electron-main.js`：窗口、菜单和 IPC。
+- `src/utils/voice-activity.ts`：VAD 语音活动监测与 Web Audio 采样。
+- `src/utils/zen-flow.ts`：Zen 练习流程调度回调。
+- `src-electron/electron-main.ts`：窗口、菜单和 IPC。
 - `src-electron/electron-preload.ts`：强类型 `window.fileAPI` 桥接（`openFolder`、`onFolderSelected`、`readTextFile` 等）。
-- `src-electron/fileSystem.js`：音频/字幕配对，并用 `jschardet` 检测字幕编码。
-- `src/router/`：路由；`src/pages/IndexPage.vue` 仍是初始页面，不是学习界面。
+- `src-electron/fileSystem.ts`：音频/字幕配对，并用 `jschardet` 检测字幕编码。
+- `src-electron/recording-store.ts`：SQLite 存储管理与原子写入。
+- `src/router/`：强类型路由（`index.ts`、`routes.ts`）；`src/pages/IndexPage.vue` 仍是初始页面，不是学习界面。
 - `src/css/`：公共样式和 Quasar 主题变量。
 - `resources/`：手动检查用的音频和 LRC 示例。
 - `quasar.config.js`：构建和 Electron 打包配置。
@@ -72,16 +75,16 @@ EcoLingo 是一款桌面语言学习应用，使用本地音频和带时间轴�
 - Zen 中暂停、导航、切课和退出都取消当前流程并释放麦克风，重试从首次录音开始；已保存录音保留。无语音暂停且不保存，录音、保存或播放错误暂停并显示对话框。S 操作跟读总开关并保持暂停。异步保存和回听必须校验 Zen 会话，禁止取消后自动续播。
 
 - 保持“先听后跟”：播放原句、暂停原音、等待 500 ms、开始录音；仅在 `MediaRecorder` 最终停止事件后前进或重复。
-- `src/utils/voice-activity.js` 使用本地 Web Audio RMS 检测和低噪声自适应阈值：连续 120 ms 语音即视为开口，尾部静音 1.2 秒后结束，最长等待开口 8 秒。录音从真正开始时计时，固定上限 10 秒，也约束无语音等待。无语音时暂停且不保存；录音在尾部静音或时限到达时自动完成，不设手动完成按钮。
+- `src/utils/voice-activity.ts` 使用本地 Web Audio RMS 检测和低噪声自适应阈值：连续 120 ms 语音即视为开口，尾部静音 1.2 秒后结束，最长等待开口 8 秒。录音从真正开始时计时，固定上限 10 秒，也约束无语音等待。无语音时暂停且不保存；录音在尾部静音或时限到达时自动完成，不设手动完成按钮。
 - 录音麦克风悬浮在底栏上方正中，尺寸 60 px：初始为红色柔和呼吸环；检测到语音后变绿，并显示绿色波纹和错落小粒子；无语音时在同一位置显示琥珀色麦克风关闭图标，并播放一次持续 1 秒的扩散效果。进入和退出柔和淡入淡出；减少动态效果偏好下禁用过渡和循环动画。
 - 不显示 REC 标记或状态文字。录音时隐藏句子录音预览。无语音不弹窗，播放保持暂停，导航或重试会清除提示。其他麦克风或录音错误使用持久对话框，点击“关闭”后消失；对话框打开时禁用播放快捷键。空格仍可取消或暂停。录音计时不依赖音频结束事件或滚动。
 - 暂停、跳转、句子导航、课程切换和关闭跟读后，播放与录音状态须一致；不得让原音与录音预览重叠。
 - 仅由明确的学习操作触发麦克风权限；清晰显示录音状态，并妥善处理拒绝授权或无设备情况。
 - 会话结束时停止媒体轨道、卸载替换的音频、取消计时器和动画循环、移除监听器并撤销对象 URL。
-- 完成录音由 `src-electron/recording-store.cjs` 保存到 Electron `userData/recordings`，包括音频和 `index.sqlite`（sql.js）。每次录音有 UUID；课程标识由音频和字幕内容哈希生成，移动文件夹后仍可关联。课程列表保存在 `localStorage`；对象 URL 仅供临时预览。
+- 完成录音由 `src-electron/recording-store.ts` 保存到 Electron `userData/recordings`，包括音频和 `index.sqlite`（sql.js）。每次录音有 UUID；课程标识由音频和字幕内容哈希生成，移动文件夹后仍可关联。课程列表保存在 `localStorage`；对象 URL 仅供临时预览。
 - 存储操作须留在 Electron 主进程，并通过窄范围 preload 方法调用。先写音频，再原子替换索引。录音须同时关联课程标识和句子标识，不能只用可能跨课程冲突的时间戳。
 - 整体采用苹果风格的半透明玻璃材质、柔和背景和细边框。窗口采用操作系统原生自带的标题栏与菜单；页面顶部单行紧凑呈现课程标题、句子计数与侧边栏开关；不提供集中录音管理、备份恢复或音频导出。保留本地录音保存、句子最新录音回放及练习中的自动回听；已有录音不删除。
-- 播放偏好（速度、跟读、单句循环、课程抽屉状态）通过 `src/utils/settings.js` 立即保存到 `localStorage` 的 `ecolingo.settings.v1`。启动恢复偏好时不得请求麦克风。
+- 播放偏好（速度、跟读、单句循环、课程抽屉状态）通过 `src/utils/settings.ts` 立即保存到 `localStorage` 的 `ecolingo.settings.v1`。启动恢复偏好时不得请求麦克风。
 - 除非明确要求，否则学习者录音必须保留在本地。
 - 学习页包含打开文件夹的空状态，以及固定的课程标题和句子计数。句子切换时自动滚动居中；滚轮、触摸、导航键或拖动滚动条会暂停跟随，直到点击“回到当前句”。底栏使用带标签的跟读开关；速度菜单通过点击展开，不提供音量或静音控件。录音预览在播放/停止间切换、高亮对应句子，并在停止时取消待处理加载。控件和原生菜单使用中文，快捷键说明位于“帮助”。
 - 底栏突出上一句、播放/暂停和下一句；课程选择位于课程抽屉。句子行预留固定操作位显示麦克风或录音预览，只使用一种浅蓝色活动高亮，不使用录音历史背景色。

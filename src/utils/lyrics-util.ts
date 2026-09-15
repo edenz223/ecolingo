@@ -12,7 +12,7 @@ export function parseLRC(lrcContent: string): Sentence[] {
       const text = content.includes('^')
         ? content.replace('^', ' - ')
         : content;
-      if (isEntireSentenceBracketed(text)) return;
+      if (!text.trim() || isEntireSentenceBracketed(text)) return;
       sentences.push({ start, text });
     }
   });
@@ -31,7 +31,7 @@ export function parseSRT(content: string): Sentence[] {
     if (!time || !time.includes(' --> ')) continue;
     const [startTime, endTime] = time.split(' --> ').map(timeToSeconds);
     const text = textLines.join(' ');
-    if (isEntireSentenceBracketed(text)) continue;
+    if (!text.trim() || isEntireSentenceBracketed(text)) continue;
     sentences.push({
       start: startTime,
       end: endTime,

@@ -1,5 +1,16 @@
+import type {
+  VADOptions,
+  VADResult,
+  VADReason,
+  VoiceActivityDetector,
+  VoiceMonitor,
+} from '../types/vad';
+
 // Local energy-based endpoint detection. Times are wall-clock milliseconds.
-export function createVoiceActivityDetector(startedAt, options = {}) {
+export function createVoiceActivityDetector(
+  startedAt: number,
+  options: VADOptions = {}
+): VoiceActivityDetector {
   // Short words can contain less than 400 ms of voiced audio. Require several
   // observed frames, enough to reject a click without discarding a brief word.
   const { silenceMs = 1200, speechMs = 120, waitMs = 8000, maxMs = 30000 } = options;
@@ -9,7 +20,8 @@ export function createVoiceActivityDetector(startedAt, options = {}) {
   let noise = 0.002;
   let speaking = false;
   let heardSpeech = false;
-  return (rms, now) => {
+
+  return (rms: number, now: number): VADResult => {
     // A delayed timer must not count unobserved audio as sustained speech.
     const elapsed = Math.min(Math.max(now - previous, 0), 60);
     previous = now;
@@ -25,34 +37,43 @@ export function createVoiceActivityDetector(startedAt, options = {}) {
       noise = noise * 0.95 + rms * 0.05;
       if (!heardSpeech && now - lastVoice > 200) voicedMs = 0;
     }
-    let reason = null;
+    let reason: VADReason = null;
     if (now - startedAt >= maxMs) reason = heardSpeech ? 'limit' : 'no-speech';
     else if (heardSpeech && now - lastVoice >= silenceMs) reason = 'silence';
     else if (!heardSpeech && now - startedAt >= waitMs) reason = 'no-speech';
-    return { reason, voiceActive: speaking, state: heardSpeech ? (speaking ? 'speaking' : 'silence') : 'waiting' };
+
+    return {
+      reason,
+      voiceActive: speaking,
+      state: heardSpeech ? (speaking ? 'speaking' : 'silence') : 'waiting',
+    };
   };
 }
 
-export function createVoiceMonitor(stream) {
+export function createVoiceMonitor(stream: MediaStream): VoiceMonitor {
   const context = new AudioContext();
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
   analyser.fftSize = 2048;
   source.connect(analyser); // No connection to speakers: never monitor the mic aloud.
   const samples = new Float32Array(analyser.fftSize);
-  let timer = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   let generation = 0;
+
   function stop() {
     generation++;
-    clearTimeout(timer);
-    timer = null;
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
   }
+
   return {
-    async ready() {
+    async ready(): Promise<void> {
       await context.resume();
       if (context.state !== 'running') throw new Error('麦克风声音检测未能启动');
     },
-    start(onUpdate, options = {}) {
+    start(onUpdate: (result: VADResult) => void, options: VADOptions = {}): void {
       stop();
       const token = generation;
       const detect = createVoiceActivityDetector(performance.now(), options);
@@ -68,7 +89,7 @@ export function createVoiceMonitor(stream) {
       timer = setTimeout(poll, 20);
     },
     stop,
-    dispose() {
+    dispose(): void {
       stop();
       source.disconnect();
       analyser.disconnect();

@@ -225,24 +225,28 @@
     </q-footer>
   </q-layout>
 </template>
-<script setup>
-import { onMounted, ref, onUnmounted, watch } from "vue";
+<script setup lang="ts">
+import { onMounted, ref, onUnmounted, watch } from 'vue';
+import type { QTooltip } from 'quasar';
 import { Player } from '../modules/player';
 import { RecorderManager } from '../modules/recorder';
 import { ZenCoordinator, practiceMethods } from '../modules/zen';
 import { loadSettings, saveSettings } from '../utils/settings';
+import type { Lesson, RecordingClip } from '../types/recording';
+import type { Sentence } from '../types/subtitles';
+import type { PracticeMethod } from '../types/settings';
 
 const settings = loadSettings();
 const isWindows = window.fileAPI?.platform === 'win32';
 const showShortcuts = ref(false);
 const rightDrawerOpen = ref(settings.drawerOpen);
-const drawerTooltipRef = ref(null);
+const drawerTooltipRef = ref<InstanceType<typeof QTooltip> | null>(null);
 
 function toggleDrawer() {
   drawerTooltipRef.value?.hide();
   rightDrawerOpen.value = !rightDrawerOpen.value;
 }
-const lessons = ref([]);
+const lessons = ref<Lesson[]>([]);
 const currentLessonIndex = ref(-1);
 const followSentence = ref(true);
 const lessonLoading = ref(false);
@@ -287,25 +291,25 @@ recorder.setCallbacks({
   isShadowingModeActive: () => shadowingMode.value,
   getLoadSessionId: () => player.loadSessionId,
   getCurrentSentence: () => player.currentSentence.value,
-  seekSentence: (start) => player.sound.value?.seek(start),
+  seekSentence: (start: number) => player.sound.value?.seek(start),
   stopPlayback: () => player.stopCurrentPlayback(),
   advanceSentence: () => {
     player.isShadowing.value = false;
     player.advanceSentence();
   },
-  onRecordingComplete: (completion, meta, blob) => {
+  onRecordingComplete: (completion: any, meta: any, blob: Blob) => {
     zen.completeZenRecording(completion, meta, blob);
   },
 });
 
 player.setCallbacks({
-  onLoadingChange: (loading) => {
+  onLoadingChange: (loading: boolean) => {
     lessonLoading.value = loading;
   },
-  onError: (msg) => {
+  onError: (msg: string) => {
     recorder.recordingError.value = msg;
   },
-  onSentenceChange: (sentence) => {
+  onSentenceChange: (sentence: Sentence | null) => {
     if (focusMode.value || !followSentence.value || !sentence) return;
     const element = document.getElementById(sentence.start.toString());
     element?.scrollIntoView({
@@ -313,7 +317,7 @@ player.setCallbacks({
       block: 'center',
     });
   },
-  onSentenceBoundary: (sentence) => {
+  onSentenceBoundary: (sentence: Sentence) => {
     if (zenMode.value && zenPhase.value === 'reference') {
       player.sound.value?.pause();
       if (player.stepTimerId) {
@@ -339,7 +343,7 @@ player.setCallbacks({
     }
     return false;
   },
-  onPlayLessonStart: async (lesson, sessionId) => {
+  onPlayLessonStart: async (lesson: Lesson, sessionId: number) => {
     followSentence.value = true;
     const lessonId = await window.fileAPI.recordingIdentity(JSON.parse(JSON.stringify(lesson)));
     if (sessionId !== player.loadSessionId) return;
@@ -357,7 +361,7 @@ player.setCallbacks({
   isZenReferencePlaying: () =>
     zenMode.value && zenPhase.value === 'reference' && Boolean(player.sound.value?.playing()),
   onTogglePlay: () => togglePlay(),
-  handleZenClick: (sentence, forcePlay, wasPlayingZenReference) => {
+  handleZenClick: (sentence: Sentence, forcePlay?: boolean, wasPlayingZenReference?: boolean) => {
     if (zenMode.value && (forcePlay || wasPlayingZenReference)) {
       zen.playZenReference(sentence);
       return true;
@@ -370,7 +374,7 @@ player.setCallbacks({
   stopPreview: () => recorder.stopPreview(),
 });
 
-function selectPracticeMethod(method) {
+function selectPracticeMethod(method: PracticeMethod) {
   playbackRateMenuVisible.value = false;
   zen.selectPracticeMethod(method);
 }
@@ -384,9 +388,11 @@ watch(focusMode, (val) => {
   window.fileAPI?.setFocusMode?.(val);
 });
 
-function zenNeighbor(offset) {
+function zenNeighbor(offset: number): string {
   const sentences = player.parsedSentences;
-  return sentences.value[sentences.value.indexOf(player.currentSentence.value) + offset]?.text || '';
+  const current = player.currentSentence.value;
+  if (!current) return '';
+  return sentences.value[sentences.value.indexOf(current) + offset]?.text || '';
 }
 
 function closeRecordingError() {
@@ -402,47 +408,62 @@ function resumeFollowing() {
   player.handleSentenceChange(player.currentSentence.value);
 }
 
-function handleScrollPointer(event) {
+function handleScrollPointer(event: MouseEvent | PointerEvent) {
   if (event.clientX >= document.documentElement.clientWidth) pauseFollowing();
 }
 
-function handleKeyDown(event) {
+function handleKeyDown(event: KeyboardEvent) {
   if (event.code === 'Escape' && focusMode.value) {
     focusMode.value = false;
     return;
   }
-  if (recordingError.value || event.target.closest('input, textarea, select, button, [role="switch"], [role="slider"], [contenteditable="true"]') || event.altKey || event.metaKey) return;
-  if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.code)) pauseFollowing();
+  const target = event.target as HTMLElement | null;
+  if (
+    recordingError.value ||
+    target?.closest(
+      'input, textarea, select, button, [role="switch"], [role="slider"], [contenteditable="true"]'
+    ) ||
+    event.altKey ||
+    event.metaKey
+  )
+    return;
+  if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.code))
+    pauseFollowing();
   if (!player.sound.value && !['KeyQ', 'KeyE', 'KeyR'].includes(event.code)) return;
   if (event.ctrlKey && event.code !== 'KeyR') return;
-  if (!['Space', 'KeyS', 'KeyD', 'KeyA', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyR'].includes(event.code)) return;
+  if (
+    !['Space', 'KeyS', 'KeyD', 'KeyA', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyR'].includes(
+      event.code
+    )
+  )
+    return;
   if (event.code === 'KeyR' && !event.ctrlKey) return;
   event.preventDefault();
-  if (event.code === 'Space' && !event.target.closest('input, textarea')) {
+  if (event.code === 'Space' && !target?.closest('input, textarea')) {
     togglePlay();
   }
-  if (event.code === 'KeyS' && !event.target.closest('input, textarea')) {
+  if (event.code === 'KeyS' && !target?.closest('input, textarea')) {
     toggleShadowingMode();
   }
-  if (event.code === 'KeyD' && !event.target.closest('input, textarea')) {
+  if (event.code === 'KeyD' && !target?.closest('input, textarea')) {
     nextSentence();
   }
-  if (event.code === 'KeyA' && !event.target.closest('input, textarea')) {
+  if (event.code === 'KeyA' && !target?.closest('input, textarea')) {
     beforeSentence();
   }
-  if (event.code === 'KeyQ' && !event.target.closest('input, textarea')) {
+  if (event.code === 'KeyQ' && !target?.closest('input, textarea')) {
     prev();
   }
-  if (event.code === 'KeyE' && !event.target.closest('input, textarea')) {
+  if (event.code === 'KeyE' && !target?.closest('input, textarea')) {
     next();
   }
-  if (event.code === 'KeyC' && !event.target.closest('input, textarea')) {
-    setPlaybackRate((parseFloat(currentPlaybackRate.value) + 0.1).toFixed(2));
+  if (event.code === 'KeyC' && !target?.closest('input, textarea')) {
+    setPlaybackRate((parseFloat(String(currentPlaybackRate.value)) + 0.1).toFixed(2));
   }
-  if (event.code === 'KeyX' && !event.target.closest('input, textarea')) {
-    setPlaybackRate((parseFloat(currentPlaybackRate.value) - 0.1).toFixed(2));
+  if (event.code === 'KeyX' && !target?.closest('input, textarea')) {
+    setPlaybackRate((parseFloat(String(currentPlaybackRate.value)) - 0.1).toFixed(2));
   }
-  if (event.code === 'KeyZ' && !event.target.closest('input, textarea')) {
+  if (event.code === 'KeyZ' && !target?.closest('input, textarea')) {
     setPlaybackRate(1);
   }
   if (event.code === 'KeyR' && event.ctrlKey) {
@@ -450,8 +471,10 @@ function handleKeyDown(event) {
   }
 }
 
-function handleGlobalPointerDown(e) {
-  const target = e.target?.closest?.('button, .q-btn, [role="button"], [role="switch"]');
+function handleGlobalPointerDown(e: Event) {
+  const target = (e.target as HTMLElement | null)?.closest?.(
+    'button, .q-btn, [role="button"], [role="switch"]'
+  );
   if (target) {
     target.dispatchEvent(new MouseEvent('mouseleave'));
   }
@@ -460,7 +483,7 @@ function handleGlobalPointerDown(e) {
 onMounted(() => {
   loadLocalLessons();
 
-  window.fileAPI?.onFolderSelected((event, values) => {
+  window.fileAPI?.onFolderSelected((_event, values: Lesson[]) => {
     handleOpenFolderResult(values);
   });
 
@@ -481,12 +504,29 @@ onUnmounted(() => {
   recorder.releaseRecordingResources();
 });
 
-watch([currentPlaybackRate, shadowingMode, player.repeatOne, rightDrawerOpen, zenFirstAttempt, practiceMethod],
+watch(
+  [
+    currentPlaybackRate,
+    shadowingMode,
+    player.repeatOne,
+    rightDrawerOpen,
+    zenFirstAttempt,
+    practiceMethod,
+  ],
   ([playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod]) => {
-    saveSettings({ playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod });
-  }, { flush: 'sync' });
+    saveSettings({
+      playbackRate,
+      shadowing,
+      repeatOne,
+      drawerOpen,
+      zenFirstAttempt,
+      practiceMethod,
+    });
+  },
+  { flush: 'sync' }
+);
 
-function playLesson(index) {
+function playLesson(index: number) {
   if (index >= 0 && index < lessons.value.length) {
     currentLessonIndex.value = index;
     player.playLesson(lessons.value[index]);
@@ -511,21 +551,23 @@ function togglePlay() {
 }
 
 function loadLocalLessons() {
-  const localLessons = localStorage.getItem("lessons");
+  const localLessons = localStorage.getItem('lessons');
   if (localLessons) {
     lessons.value = JSON.parse(localLessons);
   }
 }
 
-function handleOpenFolderResult(values) {
+function handleOpenFolderResult(values: Lesson[]) {
   if (values && values.length > 0) {
     lessons.value = values;
-    localStorage.setItem("lessons", JSON.stringify(values));
+    localStorage.setItem('lessons', JSON.stringify(values));
   }
 }
 
 function beforeSentence() {
-  const idx = player.parsedSentences.value.indexOf(player.currentSentence.value);
+  const current = player.currentSentence.value;
+  if (!current) return;
+  const idx = player.parsedSentences.value.indexOf(current);
   if (idx > 0) {
     if (player.currentPause) clearTimeout(player.currentPause);
     player.clickSentence(player.parsedSentences.value[idx - 1]);
@@ -533,7 +575,9 @@ function beforeSentence() {
 }
 
 function nextSentence() {
-  const idx = player.parsedSentences.value.indexOf(player.currentSentence.value);
+  const current = player.currentSentence.value;
+  if (!current) return;
+  const idx = player.parsedSentences.value.indexOf(current);
   if (idx >= 0 && idx < player.parsedSentences.value.length - 1) {
     if (player.currentPause) clearTimeout(player.currentPause);
     player.clickSentence(player.parsedSentences.value[idx + 1]);
@@ -581,13 +625,13 @@ function toggleShadowingMode() {
   }
 }
 
-function setPlaybackRate(rate) {
+function setPlaybackRate(rate: number | string) {
   const value = Number(rate);
   if (!Number.isFinite(value)) return;
   player.setPlaybackRate(Math.min(4, Math.max(0.1, value)));
 }
 
-function startSentenceRecording(sentence) {
+function startSentenceRecording(sentence: Sentence) {
   recorder.startSentenceRecording(sentence, {
     lessonName: player.currentLesson?.name || '',
     loadSessionId: player.loadSessionId,
@@ -611,7 +655,7 @@ function stopSentenceRecording(discard = false) {
   recorder.stopSentenceRecording(discard);
 }
 
-function previewRecording(clip, onComplete = null) {
+function previewRecording(clip: RecordingClip, onComplete: (() => void) | null = null) {
   return recorder.previewRecording(clip, onComplete);
 }
 
@@ -619,7 +663,7 @@ function stopPreview() {
   recorder.stopPreview();
 }
 
-function playUserRecording(sentenceStart) {
+function playUserRecording(sentenceStart: number) {
   recorder.playUserRecording(sentenceStart);
 }
 

@@ -1,9 +1,10 @@
-import type { UserSettings, PracticeMethod } from '../types/settings';
+import type { UserSettings, PracticeMethod, LoopMode } from '../types/settings';
 
 const defaults: UserSettings = {
   playbackRate: 1,
   shadowing: false,
-  repeatOne: false,
+  loopMode: 'off',
+  repeatCount: 1,
   drawerOpen: true,
   zenFirstAttempt: true,
   practiceMethod: 'listen',
@@ -17,10 +18,18 @@ export function normalizeSettings(value: unknown): UserSettings {
   if (['listen', 'replay', 'attempt'].includes(obj.practiceMethod as string)) {
     settings.practiceMethod = obj.practiceMethod as PracticeMethod;
   }
-  for (const key of ['shadowing', 'repeatOne', 'drawerOpen', 'zenFirstAttempt'] as const) {
+  for (const key of ['shadowing', 'drawerOpen', 'zenFirstAttempt'] as const) {
     if (typeof obj[key] === 'boolean') {
       settings[key] = obj[key] as boolean;
     }
+  }
+  if (['off', 'list', 'one'].includes(obj.loopMode as string)) {
+    settings.loopMode = obj.loopMode as LoopMode;
+  } else if (obj.loopMode === undefined && obj.repeatOne === true) {
+    settings.loopMode = 'one';
+  }
+  if (typeof obj.repeatCount === 'number' && Number.isInteger(obj.repeatCount) && obj.repeatCount >= 1 && obj.repeatCount <= 99) {
+    settings.repeatCount = obj.repeatCount;
   }
   const rate = obj.playbackRate;
   if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0.1 && rate <= 4) {

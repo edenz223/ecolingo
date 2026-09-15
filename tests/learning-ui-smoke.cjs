@@ -32,7 +32,7 @@ app.whenReady().then(async () => {
     titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#5c6b77', height: 34 },
     webPreferences: { preload, sandbox: false, contextIsolation: true, webSecurity: false, backgroundThrottling: false, offscreen: true } });
   win.webContents.setAudioMuted(true);
-  const evaluate = (source) => win.webContents.executeJavaScript(source);
+  const evaluate = (source) => win.webContents.executeJavaScript(source).catch(error => { throw new Error(source + ': ' + error.message); });
   async function waitFor(condition) {
     for (let count = 0; count < 100; count++) {
       if (await evaluate(condition)) return;
@@ -65,6 +65,7 @@ app.whenReady().then(async () => {
     await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
     await evaluate(`document.querySelector('.lesson-item').click()`);
     await waitFor(`Boolean(document.querySelector('.sentence-item'))`);
+    await waitFor(`Boolean(document.querySelector('[aria-label="暂停"]'))`);
     await evaluate(`document.querySelector('[aria-label="暂停"]').click()`);
     assert.match(await evaluate(`document.querySelector('.lesson-progress').textContent`), /002 02.*第.*句/s);
     assert.equal(await evaluate(`document.querySelector('[role="switch"]').getAttribute('aria-checked')`), 'false');
@@ -143,19 +144,38 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate(`document.querySelectorAll('[role="switch"]').length`), 1);
     await evaluate(`document.querySelector('[role="switch"]').click()`);
     await waitFor(`document.querySelectorAll('[role="switch"]').length === 1`);
-    await evaluate(`document.querySelector('[aria-label="开启单句循环"]').click()`);
+    await evaluate(`document.querySelector('[aria-label="循环模式：顺序播放"]').click()`);
+    await waitFor(`Array.from(document.querySelectorAll('.q-menu .q-item')).some(item => item.textContent.includes('单句循环'))`);
+    await evaluate(`Array.from(document.querySelectorAll('.q-menu .q-item')).find(item => item.textContent.includes('单句循环')).click()`);
+    for (const [label, id] of [['列表循环', 'list'], ['单句循环', 'one']]) {
+      await waitFor(`!document.querySelector('.q-menu')`);
+      await evaluate(`document.querySelector('[aria-label^="循环模式："]').click()`);
+      await waitFor(`Boolean(document.querySelector('.q-menu .q-item'))`);
+      await evaluate(`Array.from(document.querySelectorAll('.q-menu .q-item')).find(item => item.textContent.includes(${JSON.stringify(label)})).click()`);
+      assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).loopMode, id);
+    }
+    await waitFor(`!document.querySelector('.q-menu')`);
+    await evaluate(`document.querySelector('[aria-label^="循环模式："]').click()`);
+    await waitFor(`Boolean(document.querySelector('[aria-label="单句循环次数"]'))`);
+    await evaluate(`(() => { const input = document.querySelector('[aria-label="单句循环次数"]'); input.click(); input.value = '4'; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).repeatCount, 4);
+    await evaluate(`document.querySelector('[aria-label="单句循环次数"]').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }))`);
+    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).repeatCount, 5);
+    await evaluate(`document.querySelector('[aria-label="单句循环次数"]').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true }))`);
+    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).repeatCount, 4);
     const saved = JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`));
     assert.equal(saved.playbackRate, 1.25);
-    assert.equal(saved.repeatOne, true);
+    assert.equal(saved.loopMode, 'one');
     assert.equal('volume' in saved, false);
     assert.equal('muted' in saved, false);
     await win.loadFile(path.join(root, 'dist/electron/UnPackaged/index.html'));
     await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
     assert.ok(await evaluate(`document.querySelector('[aria-label="播放速度"]').textContent.includes('1.25')`));
-    assert.ok(await evaluate(`Boolean(document.querySelector('[aria-label="关闭单句循环"]'))`));
+    assert.ok(await evaluate(`Boolean(document.querySelector('[aria-label="循环模式：单句循环4次"]'))`));
     assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).zenFirstAttempt, false);
     await evaluate(`document.querySelector('.lesson-item').click()`);
     await waitFor(`Boolean(document.querySelector('.sentence-item'))`);
+    await waitFor(`Boolean(document.querySelector('[aria-label="暂停"]'))`);
     await evaluate(`document.querySelector('[aria-label="暂停"]').click()`);
     assert.equal(await evaluate(`document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', bubbles: true, cancelable: true }))`), true);
     assert.equal('muted' in JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)), false);

@@ -17,7 +17,7 @@ function session(storage) {
 test('all supported preferences survive a new session, including false values', () => {
   const values = new Map();
   const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
-  const expected = { playbackRate: 1.3, shadowing: true, repeatOne: true, drawerOpen: false, zenFirstAttempt: false, practiceMethod: 'replay' };
+  const expected = { playbackRate: 1.3, shadowing: true, loopMode: 'one', repeatCount: 1, drawerOpen: false, zenFirstAttempt: false, practiceMethod: 'replay' };
   session(storage).saveSettings(expected);
   assert.equal(JSON.stringify(session(storage).loadSettings()), JSON.stringify(expected));
 });
@@ -40,4 +40,32 @@ test('unavailable storage does not prevent learning', () => {
   const scope = session({ getItem() { throw new Error('denied'); }, setItem() { throw new Error('full'); } });
   assert.equal(scope.loadSettings().playbackRate, 1);
   assert.doesNotThrow(() => scope.saveSettings({ playbackRate: 1.2 }));
+});
+
+test('loop modes persist and legacy repeat-one migrates', () => {
+  for (const loopMode of ['off', 'list', 'one']) {
+    const values = new Map();
+    const storage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) };
+    session(storage).saveSettings({ loopMode });
+    assert.equal(session(storage).loadSettings().loopMode, loopMode);
+  }
+  assert.equal(session({ getItem: () => '{"repeatOne":true}' }).loadSettings().loopMode, 'one');
+  assert.equal(session({ getItem: () => '{"loopMode":"invalid"}' }).loadSettings().loopMode, 'off');
+  assert.equal(session({ getItem: () => '{"loopMode":"list","repeatOne":true}' }).loadSettings().loopMode, 'list');
+});
+
+
+test('removed twice mode falls back to sequential playback', () => {
+  for (const raw of ['{"loopMode":"twice"}', '{"loopMode":"twice","repeatOne":true}']) {
+    assert.equal(session({ getItem: () => raw }).loadSettings().loopMode, 'off');
+  }
+});
+
+test('repeat count persists and rejects malformed stored values', () => {
+  for (const repeatCount of [1, 4, 99]) {
+    assert.equal(session({ getItem: () => JSON.stringify({ repeatCount }) }).loadSettings().repeatCount, repeatCount);
+  }
+  for (const repeatCount of [0, -1, 100, 1.5, '3', null]) {
+    assert.equal(session({ getItem: () => JSON.stringify({ repeatCount }) }).loadSettings().repeatCount, 1);
+  }
 });

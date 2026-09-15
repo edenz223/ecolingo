@@ -54,16 +54,16 @@ export class ZenCoordinator {
         this.recorder.saveRecording(meta, blob),
       preview: (clip: any, onComplete: any) =>
         this.recorder.previewRecording(clip, onComplete),
-      advance: (sentence: Sentence) => {
-        const next = this.player.repeatOne.value
-          ? sentence
-          : this.player.getNextSentence();
+      advance: () => {
+        const next = this.player.completeSentence();
         if (!next) {
+          if (this.player.continueLessonList()) return;
           this.player.stopCurrentPlayback();
           this.recorder.releaseRecordingResources();
           return;
         }
         this.player.currentSentence.value = next;
+        this.player.handleSentenceChange(next);
         this.startZenSentence();
       },
       stop: () => this.player.stopCurrentPlayback(),

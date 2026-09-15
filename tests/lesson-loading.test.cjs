@@ -162,7 +162,8 @@ test('repeat-one restarts after final shadow interval', async () => {
   const a = player.playLesson(lesson('A'));
   resolve('A'); await a;
   sounds[0].options.onload();
-  player.repeatOne.value = true;
+  player.loopMode.value = 'one';
+  player.setRepeatCount(3);
   for (let i = 0; i < 2; i++) {
     sounds[0].active = false;
     sounds[0].options.onend();
@@ -273,4 +274,76 @@ test('pending recording is cancelled when shadowing ends or lesson changes', asy
     assert.equal(starts(), 0);
     assert.equal(context.isRecording.value, false);
   }
+});
+const run = async (mode) => {
+  const h = setup();
+  const pending = h.player.playLesson(h.lesson('A'));
+  h.resolve('A'); await pending;
+  h.sounds[0].options.onload();
+  const sentences = [{ start: 0, end: 5, text: 'first' }, { start: 5, end: 10, text: 'last' }];
+  h.player.parsedSentences.value = sentences;
+  h.player.currentSentence.value = sentences[0];
+  h.player.setLoopMode(mode);
+  return { ...h, sentences };
+};
+
+
+test('list advances to the next lesson only at the final sentence', async () => {
+  const { player, sounds, frames, sentences } = await run('list');
+  let advances = 0;
+  player.setCallbacks({ onListEnd: () => { advances++; player.releaseLesson(); } });
+  player.advanceSentence();
+  assert.equal(advances, 0);
+  assert.equal(player.currentSentence.value, sentences[1]);
+  sounds[0].active = false;
+  sounds[0].options.onend();
+  assert.equal(advances, 1);
+  assert.equal(frames.size, 0);
+});
+
+
+test('automatic lesson continuation waits for audio and ignores stale loads', async () => {
+  const { player, sounds, lesson, resolve } = setup();
+  let ready = 0;
+  const first = player.playLesson(lesson('A'), () => ready++);
+  resolve('A'); await first;
+  assert.equal(ready, 0);
+  const second = player.playLesson(lesson('B'), () => ready++);
+  sounds[0].options.onload();
+  assert.equal(ready, 0);
+  resolve('B'); await second;
+  sounds[1].options.onload();
+  assert.equal(ready, 1);
+  assert.equal(player.currentLesson.name, 'B');
+});
+
+test('custom repeat counts advance each sentence after exactly N completed passes', async () => {
+  for (const count of [1, 2, 5, 99]) {
+    const { player, sounds, sentences } = await run('one');
+    player.setRepeatCount(count);
+    for (let index = 0; index < sentences.length; index++) {
+      for (let pass = 1; pass <= count; pass++) {
+        player.advanceSentence();
+        const expected = pass < count || index === sentences.length - 1 ? index : index + 1;
+        assert.equal(player.currentSentence.value, sentences[expected]);
+        assert.equal(sounds[0].playing(), !(index === sentences.length - 1 && pass === count));
+      }
+    }
+  }
+});
+
+test('editing count and navigating reset completed passes', async () => {
+  const { player, sentences } = await run('one');
+  player.setRepeatCount(3);
+  player.advanceSentence();
+  assert.equal(player.completedPasses, 1);
+  player.setRepeatCount(2);
+  assert.equal(player.completedPasses, 0);
+  player.advanceSentence();
+  await player.clickSentence(sentences[1]);
+  assert.equal(player.completedPasses, 0);
+  player.setRepeatCount(0);
+  assert.equal(player.repeatCount.value, 1);
+  player.setRepeatCount(1000);
+  assert.equal(player.repeatCount.value, 99);
 });

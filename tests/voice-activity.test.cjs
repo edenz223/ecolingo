@@ -284,12 +284,13 @@ test('recording deadline is always ten seconds', async () => {
 test('manual completion repeats current sentence and final sentence ends cleanly', async () => {
   const h = setup();
   try {
-    h.player.repeatOne.value = true;
+    h.player.loopMode.value = 'one';
+    h.player.setRepeatCount(2);
     h.player.step(); await flush();
     h.finishShadowing(); await flush();
     assert.equal(h.sound.at, 0);
     assert.equal(h.sound.playing(), true);
-    h.player.repeatOne.value = false;
+    h.player.loopMode.value = 'off';
     h.player.currentSentence.value = h.sentences[1];
     h.sound.at = 2;
     h.player.step(true); await flush();
@@ -538,7 +539,8 @@ test('Zen repeats the complete cycle and stops after the final sentence replay',
     const h = setup();
     try {
       h.player.currentSentence.value = h.sentences[1];
-      h.player.repeatOne.value = repeat;
+      h.player.loopMode.value = repeat ? 'one' : 'off';
+      h.player.setRepeatCount(2);
       await reachZenPreview(h);
       h.finishRead();
       await flush();
@@ -682,5 +684,24 @@ test('practice selection is independent from focus layout and survives the maste
     assert.equal(h.zenMode.value, false);
     assert.equal(h.focusMode.value, true);
     assert.equal(h.sound.seek(), h.sentences[0].start);
+  } finally { h.cleanup(); }
+});
+
+
+test('Zen list changes lessons only after the final replay ends', async () => {
+  const h = setup();
+  try {
+    let advances = 0;
+    h.player.setCallbacks({ onListEnd: () => { advances++; h.player.releaseLesson(); } });
+    h.player.currentSentence.value = h.sentences[1];
+    h.player.setLoopMode('list');
+    await reachZenPreview(h);
+    h.finishRead();
+    await flush();
+    assert.equal(advances, 0);
+    h.previews[0].onended();
+    await flush();
+    assert.equal(advances, 1);
+    assert.equal(h.zenPhase.value, 'idle');
   } finally { h.cleanup(); }
 });

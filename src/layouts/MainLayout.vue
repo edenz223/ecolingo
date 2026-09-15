@@ -199,13 +199,29 @@
           :aria-pressed="focusMode" :disable="!player.currentSentence.value" @click="toggleFocusMode">
           <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100">{{ focusMode ? '退出专注显示' : '专注显示' }}</q-tooltip>
         </q-btn>
-        <q-btn flat dense :icon="player.repeatOne.value ? 'repeat_one' : 'repeat'"
-          :color="player.repeatOne.value ? 'light-blue-4' : undefined" :disable="!player.sound.value"
-          :aria-label="player.repeatOne.value ? '关闭单句循环' : '开启单句循环'" :aria-pressed="player.repeatOne.value"
-          @click="player.repeatOne.value = !player.repeatOne.value">
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip">{{
-            player.repeatOne.value ? '关闭单句循环' : '开启单句循环'
-            }}</q-tooltip>
+        <q-btn flat dense :icon="player.loopMode.value === 'one' ? 'repeat_one' : 'repeat'"
+          :color="player.loopMode.value !== 'off' ? 'light-blue-4' : undefined" :disable="!player.sound.value"
+          :aria-label="'循环模式：' + (player.loopMode.value === 'one' ? '单句循环' + player.repeatCount.value + '次' : loopModes.find(item => item.id === player.loopMode.value)?.label)">
+          <q-menu>
+            <q-list>
+              <q-item v-for="mode in loopModes" :key="mode.id" clickable v-close-popup
+                :active="player.loopMode.value === mode.id" @click="player.setLoopMode(mode.id)">
+                <q-item-section>
+                  <div v-if="mode.id === 'one'" class="row items-center no-wrap">
+                    <span>单句循环</span>
+                    <input aria-label="单句循环次数" type="number" min="1" max="99" step="1"
+                      :value="player.repeatCount.value" style="width: 3.5em; margin: 0 4px; color: inherit;"
+                      @click.stop @keydown.stop @change="changeRepeatCount"
+                      @wheel.stop.prevent="scrollRepeatCount" />
+                    <span>次</span>
+                  </div>
+                  <template v-else>{{ mode.label }}</template>
+                </q-item-section>
+                <q-item-section side v-if="player.loopMode.value === mode.id"><q-icon name="check" /></q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+          <q-tooltip>循环模式</q-tooltip>
         </q-btn>
 
         <!-- Add this new button for playback rate control -->
@@ -236,6 +252,11 @@ import type { Lesson, RecordingClip } from '../types/recording';
 import type { Sentence } from '../types/subtitles';
 import type { PracticeMethod } from '../types/settings';
 
+const loopModes = [
+  { id: 'off', label: '顺序播放' },
+  { id: 'list', label: '列表循环' },
+  { id: 'one', label: '单句循环' },
+] as const;
 const settings = loadSettings();
 const isWindows = window.fileAPI?.platform === 'win32';
 const showShortcuts = ref(false);
@@ -259,7 +280,8 @@ const playbackRates = [0.5, 0.75, 1, 1.25, 1.5];
 
 const player = new Player({
   playbackRate: currentPlaybackRate,
-  repeatOne: ref(settings.repeatOne),
+  loopMode: ref(settings.loopMode),
+  repeatCount: ref(settings.repeatCount),
 });
 
 const recorder = new RecorderManager();
@@ -303,6 +325,9 @@ recorder.setCallbacks({
 });
 
 player.setCallbacks({
+  onListEnd: () => {
+    if (lessons.value.length) playLesson((currentLessonIndex.value + 1) % lessons.value.length, true);
+  },
   onLoadingChange: (loading: boolean) => {
     lessonLoading.value = loading;
   },
@@ -508,16 +533,18 @@ watch(
   [
     currentPlaybackRate,
     shadowingMode,
-    player.repeatOne,
+    player.loopMode,
+    player.repeatCount,
     rightDrawerOpen,
     zenFirstAttempt,
     practiceMethod,
   ],
-  ([playbackRate, shadowing, repeatOne, drawerOpen, zenFirstAttempt, practiceMethod]) => {
+  ([playbackRate, shadowing, loopMode, repeatCount, drawerOpen, zenFirstAttempt, practiceMethod]) => {
     saveSettings({
       playbackRate,
       shadowing,
-      repeatOne,
+      loopMode,
+      repeatCount,
       drawerOpen,
       zenFirstAttempt,
       practiceMethod,
@@ -526,10 +553,23 @@ watch(
   { flush: 'sync' }
 );
 
-function playLesson(index: number) {
+function changeRepeatCount(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (input.value.trim()) player.setRepeatCount(input.valueAsNumber);
+  input.value = String(player.repeatCount.value);
+}
+
+function scrollRepeatCount(event: WheelEvent) {
+  if (!event.deltaY) return;
+  player.setRepeatCount(player.repeatCount.value + (event.deltaY < 0 ? 1 : -1));
+}
+
+function playLesson(index: number, continuePlayback = false) {
   if (index >= 0 && index < lessons.value.length) {
     currentLessonIndex.value = index;
-    player.playLesson(lessons.value[index]);
+    player.playLesson(lessons.value[index], () => {
+      if (continuePlayback && zenMode.value) zen.startZenSentence();
+    });
   }
 }
 

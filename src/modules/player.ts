@@ -1,3 +1,4 @@
+import type { LoopMode } from '../types/settings';
 import { ref, type Ref } from 'vue';
 import { Howl } from 'howler';
 import type { Sentence } from '../types/subtitles';
@@ -6,6 +7,7 @@ import { parseLRC, parseSRT } from '../utils/lyrics-util';
 
 export interface PlayerCallbacks {
   onSentenceBoundary?: (sentence: Sentence, ended: boolean) => boolean | void;
+  onListEnd?: () => void;
   onSentenceChange?: (sentence: Sentence | null) => void;
   onPlayLessonStart?: (lesson: Lesson, sessionId: number) => Promise<void> | void;
   readTextFile?: (path: string) => Promise<string>;
@@ -21,7 +23,8 @@ export interface PlayerCallbacks {
 
 export interface PlayerOptions {
   playbackRate?: Ref<number>;
-  repeatOne?: Ref<boolean>;
+  loopMode?: Ref<LoopMode>;
+  repeatCount?: Ref<number>;
   callbacks?: PlayerCallbacks;
 }
 
@@ -35,7 +38,9 @@ export class Player {
   parsedSentences: Ref<Sentence[]>;
   isScrolling: Ref<boolean>;
   currentPause: ReturnType<typeof setTimeout> | null;
-  repeatOne: Ref<boolean>;
+  loopMode: Ref<LoopMode>;
+  repeatCount: Ref<number>;
+  completedPasses = 0;
   isShadowing: Ref<boolean>;
   playbackRate: Ref<number>;
   callbacks: PlayerCallbacks;
@@ -50,7 +55,8 @@ export class Player {
     this.parsedSentences = ref([]);
     this.isScrolling = ref(false);
     this.currentPause = null;
-    this.repeatOne = options.repeatOne || ref(false);
+    this.loopMode = options.loopMode || ref('off');
+    this.repeatCount = options.repeatCount || ref(1);
     this.isShadowing = ref(false);
     this.playbackRate = options.playbackRate || ref(1);
     this.callbacks = options.callbacks || {};
@@ -60,7 +66,7 @@ export class Player {
     Object.assign(this.callbacks, callbacks);
   }
 
-  async playLesson(lesson: Lesson) {
+  async playLesson(lesson: Lesson, onReady?: () => void) {
     this.releaseLesson();
     this.callbacks.onLoadingChange?.(true);
     const sessionId = this.loadSessionId;
@@ -85,7 +91,7 @@ export class Player {
         ? parseSRT(content)
         : parseLRC(content);
       if (!sentences.length) throw new Error('字幕中没有可用的句子，请检查字幕文件。');
-      this.initializeSound(audioFilePath, sentences, sessionId);
+      this.initializeSound(audioFilePath, sentences, sessionId, onReady);
     } catch (error: any) {
       if (sessionId === this.loadSessionId) {
         this.callbacks.onLoadingChange?.(false);
@@ -114,7 +120,7 @@ export class Player {
     this.isScrolling.value = false;
   }
 
-  initializeSound(audioFilePath: string, sentences: Sentence[], sessionId: number) {
+  initializeSound(audioFilePath: string, sentences: Sentence[], sessionId: number, onReady?: () => void) {
     const sound = new Howl({
       preload: false,
       src: [audioFilePath],
@@ -131,6 +137,7 @@ export class Player {
         this.sound.value = sound;
         this.parsedSentences.value = sentences;
         this.clickSentence(sentences[0]);
+        onReady?.();
       },
       onloaderror: (id: unknown, error: unknown) => {
         if (sessionId !== this.loadSessionId) return;
@@ -193,16 +200,9 @@ export class Player {
   }
 
   advanceSentence() {
-    if (this.repeatOne.value) {
-      if (this.currentSentence.value) {
-        this.sound.value?.seek(this.currentSentence.value.start);
-      }
-      if (this.sound.value && !this.sound.value.playing()) this.sound.value.play();
-      this.scheduleStep();
-      return;
-    }
-    const nextSentence = this.getNextSentence();
+    const nextSentence = this.completeSentence();
     if (!nextSentence) {
+      if (this.continueLessonList()) return;
       this.sound.value?.pause();
       if (this.stepTimerId) {
         clearTimeout(this.stepTimerId);
@@ -215,6 +215,33 @@ export class Player {
     if (this.sound.value && !this.sound.value.playing()) this.sound.value.play();
     this.handleSentenceChange(nextSentence);
     this.scheduleStep();
+  }
+
+  // Advance only after a complete playback or practice cycle.
+  completeSentence(): Sentence | undefined {
+    const sentence = this.currentSentence.value;
+    if (!sentence) return undefined;
+    this.completedPasses++;
+    if (this.loopMode.value === 'one' && this.completedPasses < this.repeatCount.value) return sentence;
+    this.completedPasses = 0;
+    return this.getNextSentence();
+  }
+
+  continueLessonList(): boolean {
+    if (this.loopMode.value !== 'list' || !this.callbacks.onListEnd) return false;
+    this.callbacks.onListEnd();
+    return true;
+  }
+
+  setLoopMode(mode: LoopMode) {
+    this.loopMode.value = mode;
+    this.completedPasses = 0;
+  }
+
+  setRepeatCount(value: number) {
+    if (!Number.isFinite(value)) return;
+    this.repeatCount.value = Math.max(1, Math.min(99, Math.trunc(value)));
+    this.completedPasses = 0;
   }
 
   findCurrentSentence(currentTime: number): Sentence | undefined {
@@ -294,6 +321,7 @@ export class Player {
   }
 
   stopCurrentPlayback() {
+    this.completedPasses = 0;
     this.callbacks.onStopPlayback?.();
     if (this.stepTimerId) {
       clearTimeout(this.stepTimerId);

@@ -51,7 +51,7 @@ function getRecordingStore(): Promise<RecordingStore> {
   if (!recordingStorePromise) {
     recordingStorePromise = RecordingStore.open(
       path.join(app.getPath('userData'), 'recordings')
-    ).catch((error) => {
+    ).catch(error => {
       recordingStorePromise = null;
       throw error;
     });
@@ -66,28 +66,35 @@ ipcMain.handle('recordings:list', async (_event, lessonId) =>
 ipcMain.handle('recordings:save', async (_event, meta, bytes) =>
   (await getRecordingStore()).save(meta, bytes)
 );
-ipcMain.handle('recordings:read', async (_event, id) =>
-  (await getRecordingStore()).read(id)
-);
+ipcMain.handle('recordings:read', async (_event, id) => (await getRecordingStore()).read(id));
 ipcMain.handle('window:setFocusMode', (_event, isFocus) => {
   if (!mainWindow) return;
-  if (platform === 'win32') {
-    if (isFocus) {
-      mainWindow.setTitleBarOverlay({
-        color: '#00000000',
-        symbolColor: '#00000000',
-        height: 0,
-      });
-    } else {
-      mainWindow.setTitleBarOverlay({
-        color: '#00000000',
-        symbolColor: '#5c6b77',
-        height: 34,
-      });
-    }
-  } else if (platform === 'darwin') {
+  if (platform === 'darwin') {
     mainWindow.setWindowButtonVisibility(!isFocus);
   }
+});
+
+ipcMain.handle('window:minimize', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.handle('window:maximize', () => {
+  if (!mainWindow) return false;
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+    return false;
+  } else {
+    mainWindow.maximize();
+    return true;
+  }
+});
+
+ipcMain.handle('window:close', () => {
+  mainWindow?.close();
+});
+
+ipcMain.handle('window:isMaximized', () => {
+  return mainWindow?.isMaximized() ?? false;
 });
 
 // needed in case process is undefined under Linux
@@ -105,25 +112,20 @@ function createWindow() {
     minWidth: 600,
     minHeight: 520,
     show: false,
-    frame: true,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#00000000',
-      symbolColor: '#5c6b77',
-      height: 34,
-    },
+    ...(platform === 'darwin'
+      ? {
+          frame: true,
+          titleBarStyle: 'hiddenInset',
+        }
+      : {
+          frame: false,
+        }),
     resizable: true,
     maximizable: true,
     fullscreenable: true,
     thickFrame: true,
     useContentSize: true,
-    backgroundColor: '#edf2f7',
-    ...(platform === 'win32'
-      ? {
-          backgroundMaterial: 'mica',
-          roundedCorners: true,
-        }
-      : {}),
+    backgroundColor: '#ffffff',
     webPreferences: {
       // Keep the audio-clock checks running while the lesson window is minimized.
       backgroundThrottling: false,
@@ -137,6 +139,13 @@ function createWindow() {
   });
 
   if (platform === 'win32') mainWindow.setMaximizable(true);
+
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:maximized-change', true);
+  });
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:maximized-change', false);
+  });
 
   mainWindow.loadURL(process.env.APP_URL as string);
   mainWindow.once('ready-to-show', () => mainWindow?.show());
@@ -203,7 +212,9 @@ const template: MenuItemConstructorOptions[] = [
   {
     label: '文件',
     submenu: [
-      isMac ? { label: '关闭窗口', role: 'close' as const } : { label: '退出', role: 'quit' as const },
+      isMac
+        ? { label: '关闭窗口', role: 'close' as const }
+        : { label: '退出', role: 'quit' as const },
       {
         label: '打开课程文件夹',
         click: () => {

@@ -9,11 +9,18 @@ const fileAPI: FileAPI = {
     ipcRenderer.on('folder-selected', callback),
   openFolder: () => ipcRenderer.invoke('openFolder'),
   recordingIdentity: (lesson: Lesson) => ipcRenderer.invoke('recordings:identity', lesson),
-  listRecordings: (lessonId: string | null = null) => ipcRenderer.invoke('recordings:list', lessonId),
+  listRecordings: (lessonId: string | null = null) =>
+    ipcRenderer.invoke('recordings:list', lessonId),
   saveRecording: (meta: RecordingMetadata, bytes: ArrayBuffer) =>
     ipcRenderer.invoke('recordings:save', meta, bytes),
   readRecording: (id: string) => ipcRenderer.invoke('recordings:read', id),
   setFocusMode: (isFocus: boolean) => ipcRenderer.invoke('window:setFocusMode', isFocus),
+  minimize: () => ipcRenderer.invoke('window:minimize'),
+  maximize: () => ipcRenderer.invoke('window:maximize'),
+  close: () => ipcRenderer.invoke('window:close'),
+  isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+  onMaximizedChange: (callback: (isMax: boolean) => void) =>
+    ipcRenderer.on('window:maximized-change', (_event, isMax: boolean) => callback(isMax)),
 };
 
 contextBridge.exposeInMainWorld('fileAPI', fileAPI);

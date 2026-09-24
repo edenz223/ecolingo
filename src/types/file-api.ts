@@ -10,6 +10,11 @@ export interface FileAPI {
   saveRecording(meta: RecordingMetadata, bytes: ArrayBuffer): Promise<RecordingClip>;
   readRecording(id: string): Promise<{ bytes: Uint8Array | Buffer; mime: string }>;
   setFocusMode?(isFocus: boolean): Promise<void>;
+  minimize?(): Promise<void>;
+  maximize?(): Promise<boolean>;
+  close?(): Promise<void>;
+  isMaximized?(): Promise<boolean>;
+  onMaximizedChange?(callback: (isMax: boolean) => void): void;
 }
 
 declare global {

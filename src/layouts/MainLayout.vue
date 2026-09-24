@@ -130,14 +130,6 @@
             'recording-mic--first': zenMode && zenPhase === 'first' && noSpeechSentence === null,
           }" aria-hidden="true">
           <q-icon :name="noSpeechSentence !== null ? 'mic_off' : 'mic'" size="26px" />
-          <span v-if="recordingVoiceActive || noSpeechSentence !== null"
-            :key="noSpeechSentence !== null ? 'silent' : 'voice'" class="recording-particles">
-            <span v-for="particle in 8" :key="particle" class="recording-particle"
-              :style="{
-                '--particle-angle': `${particle * 45}deg`,
-                '--particle-delay': `${(particle % 4) * 90}ms`,
-              }" />
-          </span>
         </span>
         <span class="sr-only">{{ noSpeechSentence !== null ? '未检测到声音，已暂停' : zenMode && zenPhase === 'first' ? '首次尝试，录音不保存' : '正在录音' }}</span>
       </div>
@@ -791,15 +783,7 @@ function releaseRecordingResources() {
 }
 
 .lesson-empty > .q-icon {
-  display: grid;
-  width: 66px;
-  height: 66px;
   font-size: 40px !important;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 20px;
-  box-shadow: 0 12px 30px rgba(39, 119, 211, 0.12), inset 0 1px rgba(255, 255, 255, 0.82);
 }
 
 .lesson-heading {
@@ -933,10 +917,6 @@ function releaseRecordingResources() {
   align-items: center;
   gap: 12px;
   padding: 6px;
-  background: rgba(255, 255, 255, 0.34);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-md);
 }
 
 .transport-button {
@@ -946,7 +926,7 @@ function releaseRecordingResources() {
 }
 
 .primary-play {
-  box-shadow: 0 10px 26px rgba(39, 119, 211, 0.28), inset 0 1px rgba(255, 255, 255, 0.42) !important;
+  box-shadow: 0 2px 6px rgba(39, 119, 211, 0.16) !important;
 }
 
 .q-drawer {
@@ -1035,10 +1015,6 @@ function releaseRecordingResources() {
   gap: 4px;
   min-height: 46px;
   padding: 5px;
-  background: rgba(255, 255, 255, 0.28);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 .practice-controls { grid-column: 1; grid-row: 1; justify-self: start; }
@@ -1215,26 +1191,6 @@ function releaseRecordingResources() {
   --recording-rgb: 104, 64, 160;
 }
 
-.recording-particles {
-  position: absolute;
-  inset: 0;
-  color: inherit;
-  pointer-events: none;
-}
-
-.recording-particle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0;
-  animation: recording-particle-diffuse 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-  animation-delay: var(--particle-delay);
-}
-
 .recording-mic--silent {
   --recording-accent: #a8731c;
   --recording-rgb: 168, 115, 28;
@@ -1242,13 +1198,6 @@ function releaseRecordingResources() {
 
 .recording-mic--silent::before {
   animation: recording-ripple 900ms ease-out both;
-}
-
-.recording-mic--silent .recording-particle {
-  animation-duration: 720ms;
-  animation-delay: 0ms;
-  animation-iteration-count: 1;
-  animation-fill-mode: both;
 }
 
 @keyframes recording-breathe {
@@ -1261,22 +1210,7 @@ function releaseRecordingResources() {
   100% { opacity: 0; transform: scale(1.48); }
 }
 
-@keyframes recording-particle-diffuse {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) rotate(var(--particle-angle)) translateY(-25px) scale(0.65);
-  }
-  20% {
-    opacity: 0.48;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) rotate(var(--particle-angle)) translateY(-41px) scale(0.2);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .recording-particle,
   .recording-mic::before {
     animation: none;
   }

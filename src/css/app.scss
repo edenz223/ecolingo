@@ -66,13 +66,6 @@ select {
 
 html {
   background-color: #edf2f7;
-  background-attachment: fixed;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.96) 0 12%, transparent 34%),
-    radial-gradient(circle at 76% 14%, rgba(173, 210, 242, 0.42) 0 10%, transparent 34%),
-    radial-gradient(circle at 86% 74%, rgba(202, 190, 236, 0.32) 0 12%, transparent 34%),
-    radial-gradient(circle at 28% 88%, rgba(184, 221, 216, 0.3) 0 13%, transparent 35%),
-    linear-gradient(135deg, #f5f8fc 0%, #e7eff6 48%, #eeeaf5 100%);
 }
 
 html,
@@ -421,12 +414,11 @@ button:focus-visible,
 }
 
 .glass-error-code {
-  color: rgba(39, 119, 211, 0.72);
-  font-size: clamp(96px, 24vh, 220px);
+  color: var(--ink-strong);
+  font-size: clamp(48px, 10vh, 80px);
   font-weight: 700;
-  line-height: 0.9;
-  letter-spacing: -0.08em;
-  text-shadow: 0 12px 34px rgba(39, 119, 211, 0.15);
+  line-height: 1.1;
+  letter-spacing: 0;
 }
 
 .glass-error-copy {

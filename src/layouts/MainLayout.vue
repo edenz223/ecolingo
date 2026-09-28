@@ -139,7 +139,7 @@
         <q-card-section class="text-h6 q-pb-none">键盘快捷键</q-card-section>
         <q-card-section style="white-space: pre-line; line-height: 1.8; color: var(--ink)">
           空格：播放 / 暂停 S：跟读开关 A / D：上一句 / 下一句 Q / E：上一课 / 下一课 C / X：加速 /
-          减速 Z：重置速度
+          减速 Z：重置速度 R：跳过播放 / 重新录制
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat color="primary" label="关闭" v-close-popup />
@@ -281,42 +281,37 @@
         'controls-menu-open': playbackRateMenuVisible || practiceMenuVisible || loopMenuVisible,
       }"
     >
-      <Transition name="recording-float">
-        <div
-          v-if="isRecording || noSpeechSentence !== null"
-          class="floating-recording"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
+      <div class="sr-only" role="status" aria-live="polite">
+        {{ isRecording ? '正在录音' : '' }}
+      </div>
+      <Transition name="focus-recording">
+        <q-btn
+          v-if="focusMode && isRecording"
+          round
+          unelevated
+          size="lg"
+          class="focus-recording-btn primary-play primary-play--recording"
+          aria-label="正在录音，点击停止"
+          @click="togglePlay"
         >
           <span
-            class="recording-mic recording-mic--floating"
+            :key="recordingRevision"
+            class="recording-waveform"
             :class="{
-              'recording-mic--active': recordingVoiceActive && noSpeechSentence === null,
-              'recording-mic--silent': noSpeechSentence !== null,
-              'recording-mic--first': zenMode && zenPhase === 'first' && noSpeechSentence === null,
+              'recording-waveform--voice': recordingVoiceActive,
+              'recording-waveform--restart': recordingRevision > 0,
             }"
             aria-hidden="true"
           >
-            <q-icon :name="noSpeechSentence !== null ? 'mic_off' : 'mic'" size="26px" />
+            <span class="waveform-bar waveform-bar--1" />
+            <span class="waveform-bar waveform-bar--2" />
+            <span class="waveform-bar waveform-bar--3" />
           </span>
-          <span class="sr-only">{{
-            noSpeechSentence !== null
-              ? '未检测到声音，已暂停'
-              : zenMode && zenPhase === 'first'
-              ? '首次尝试，录音不保存'
-              : '正在录音'
-          }}</span>
-        </div>
+          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
+            >录音中 · 空格停止 · R 重录</q-tooltip
+          >
+        </q-btn>
       </Transition>
-      <div
-        v-if="zenPhase === 'reference' || zenPhase === 'preview'"
-        class="floating-phase"
-        role="status"
-        :aria-label="zenPhase === 'reference' ? '正在播放原声' : '正在回听自己的录音'"
-      >
-        <q-icon :name="zenPhase === 'reference' ? 'headphones' : 'record_voice_over'" size="24px" />
-      </div>
       <q-toolbar class="wrap playback-toolbar">
         <div class="sentence-navigation">
           <q-btn
@@ -335,25 +330,46 @@
           <q-btn
             round
             unelevated
-            color="primary"
+            :color="isRecording ? undefined : 'primary'"
             size="lg"
             class="primary-play"
+            :class="{ 'primary-play--recording': isRecording }"
             :disable="!player.currentSentence.value"
             :aria-label="
-              player.isShadowing.value || (player.sound.value && player.sound.value.playing())
+              isRecording
+                ? '正在录音，点击停止'
+                : player.isShadowing.value || (player.sound.value && player.sound.value.playing())
                 ? '暂停'
                 : '播放'
             "
             :icon="
-              player.isShadowing.value || (player.sound.value && player.sound.value.playing())
+              isRecording
+                ? undefined
+                : player.isShadowing.value || (player.sound.value && player.sound.value.playing())
                 ? 'pause'
                 : 'play_arrow'
             "
             @click="togglePlay"
           >
+            <span
+              v-if="isRecording"
+              :key="recordingRevision"
+              class="recording-waveform"
+              :class="{
+                'recording-waveform--voice': recordingVoiceActive,
+                'recording-waveform--restart': recordingRevision > 0,
+              }"
+              aria-hidden="true"
+            >
+              <span class="waveform-bar waveform-bar--1" />
+              <span class="waveform-bar waveform-bar--2" />
+              <span class="waveform-bar waveform-bar--3" />
+            </span>
             <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
               >{{
-                player.isShadowing.value || (player.sound.value && player.sound.value.playing())
+                isRecording
+                  ? '录音中，R 重录'
+                  : player.isShadowing.value || (player.sound.value && player.sound.value.playing())
                   ? '暂停'
                   : '播放'
               }}
@@ -380,33 +396,45 @@
             type="button"
             class="ios-switch-control"
             role="switch"
+            aria-label="跟读"
             :aria-checked="shadowingMode"
             :disabled="!player.sound.value"
             @click="toggleShadowingMode"
           >
             <span class="ios-switch" aria-hidden="true"><span class="ios-switch__thumb" /></span>
-            <span v-if="!shadowingMode || !focusMode">跟读</span>
             <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
               >{{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S</q-tooltip
             >
           </button>
+          <span v-if="!shadowingMode" class="practice-label">跟读</span>
           <q-btn
             v-if="shadowingMode"
             flat
+            dense
             no-caps
-            :label="'跟读：' + practiceMethods.find(method => method.id === practiceMethod).label"
-            class="glass-action practice-method-btn"
+            label="跟读"
             icon-right="expand_less"
-            aria-label="选择练习方式"
+            class="practice-method-btn"
+            :disable="!player.sound.value"
+            aria-label="跟读：选择练习方式"
+            aria-haspopup="menu"
+            :aria-expanded="practiceMenuVisible"
           >
+            <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
+              >练习方式：{{
+                practiceMethods.find(method => method.id === practiceMethod)?.label ||
+                '选择练习方式'
+              }}</q-tooltip
+            >
             <q-menu
               v-model="practiceMenuVisible"
+              :no-refocus="pointerInteraction"
               class="practice-menu"
-              anchor="top right"
-              self="bottom right"
+              anchor="top left"
+              self="bottom left"
             >
-              <q-list>
-                <q-item-label header>选择接下来的练习流程</q-item-label>
+              <q-list dense>
+                <q-item-label header>练习方式</q-item-label>
                 <q-item
                   v-for="method in practiceMethods"
                   :key="method.id"
@@ -417,15 +445,11 @@
                 >
                   <q-item-section>
                     <q-item-label>{{ method.label }}</q-item-label>
-                    <q-item-label caption>{{ method.flow }}</q-item-label>
                   </q-item-section>
                   <q-item-section side
                     ><q-icon v-if="practiceMethod === method.id" name="check"
                   /></q-item-section>
                 </q-item>
-                <q-item-label caption class="q-pa-md"
-                  >首次尝试不保存，正式跟读自动保存在本地。选择方式后按播放开始。</q-item-label
-                >
               </q-list>
             </q-menu>
           </q-btn>
@@ -447,6 +471,7 @@
           <q-btn
             flat
             dense
+            class="loop-mode-control"
             :icon="player.loopMode.value === 'one' ? 'repeat_one' : 'repeat'"
             :color="player.loopMode.value !== 'off' ? 'primary' : undefined"
             :disable="!player.sound.value"
@@ -457,7 +482,7 @@
                 : loopModes.find(item => item.id === player.loopMode.value)?.label)
             "
           >
-            <q-menu v-model="loopMenuVisible">
+            <q-menu v-model="loopMenuVisible" :no-refocus="pointerInteraction">
               <q-list>
                 <q-item
                   v-for="mode in loopModes"
@@ -510,6 +535,7 @@
             >
             <q-menu
               v-model="playbackRateMenuVisible"
+              :no-refocus="pointerInteraction"
               anchor="top right"
               self="bottom right"
               :offset="[10, 0]"
@@ -535,7 +561,9 @@
   </q-layout>
 </template>
 <script setup lang="ts">
-import { onMounted, ref, onUnmounted, watch } from 'vue';
+import { computed, onMounted, ref, onUnmounted, watch } from 'vue';
+import { createPlaybackShortcut } from '../utils/playback-shortcut';
+import { createRecordingRestartShortcut } from '../utils/recording-shortcut';
 import type { QTooltip } from 'quasar';
 import { Player } from '../modules/player';
 import { RecorderManager } from '../modules/recorder';
@@ -585,6 +613,7 @@ const lessonLoading = ref(false);
 
 const shadowingMode = ref(settings.shadowing);
 const focusMode = ref(false);
+const pointerInteraction = ref(false);
 const playbackRateMenuVisible = ref(false);
 const practiceMenuVisible = ref(false);
 const loopMenuVisible = ref(false);
@@ -612,7 +641,10 @@ const practiceMethod = zen.practiceMethod;
 const zenFirstAttempt = zen.zenFirstAttempt;
 const zenPhase = zen.zenPhase;
 
-const isRecording = recorder.isRecording;
+const isRecording = computed(
+  () => recorder.isRecording.value || recorder.isPreparingRecording.value
+);
+const recordingRevision = recorder.recordingRevision;
 const recordingError = recorder.recordingError;
 const recordingVoiceActive = recorder.recordingVoiceActive;
 const recordingStatus = recorder.recordingStatus;
@@ -714,6 +746,7 @@ player.setCallbacks({
 });
 
 function selectPracticeMethod(method: PracticeMethod) {
+  practiceMenuVisible.value = false;
   playbackRateMenuVisible.value = false;
   zen.selectPracticeMethod(method);
 }
@@ -751,8 +784,38 @@ function handleScrollPointer(event: MouseEvent | PointerEvent) {
   if (event.clientX >= document.documentElement.clientWidth) pauseFollowing();
 }
 
+const playbackShortcut = createPlaybackShortcut({
+  isBlocked: () =>
+    Boolean(recordingError.value) ||
+    showShortcuts.value ||
+    practiceMenuVisible.value ||
+    loopMenuVisible.value ||
+    playbackRateMenuVisible.value,
+  canPlay: () => Boolean(player.sound.value),
+  togglePlay,
+});
+
+const recordingRestartShortcut = createRecordingRestartShortcut({
+  canRecord: () =>
+    isRecording.value || Boolean(player.sound.value?.playing()) || Boolean(previewClipId.value),
+  isBlocked: () =>
+    Boolean(recordingError.value) ||
+    showShortcuts.value ||
+    practiceMenuVisible.value ||
+    loopMenuVisible.value ||
+    playbackRateMenuVisible.value,
+  restart: () => {
+    zen.recordCurrentSentence();
+  },
+});
+
 function handleKeyDown(event: KeyboardEvent) {
+  pointerInteraction.value = false;
   if (event.code === 'Escape' && focusMode.value) {
+    if (practiceMenuVisible.value) {
+      practiceMenuVisible.value = false;
+      return;
+    }
     focusMode.value = false;
     return;
   }
@@ -771,16 +834,11 @@ function handleKeyDown(event: KeyboardEvent) {
   if (!player.sound.value && !['KeyQ', 'KeyE', 'KeyR'].includes(event.code)) return;
   if (event.ctrlKey && event.code !== 'KeyR') return;
   if (
-    !['Space', 'KeyS', 'KeyD', 'KeyA', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyR'].includes(
-      event.code
-    )
+    !['KeyS', 'KeyD', 'KeyA', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ', 'KeyR'].includes(event.code)
   )
     return;
   if (event.code === 'KeyR' && !event.ctrlKey) return;
   event.preventDefault();
-  if (event.code === 'Space' && !target?.closest('input, textarea')) {
-    togglePlay();
-  }
   if (event.code === 'KeyS' && !target?.closest('input, textarea')) {
     toggleShadowingMode();
   }
@@ -811,6 +869,15 @@ function handleKeyDown(event: KeyboardEvent) {
 }
 
 function handleGlobalPointerDown(e: Event) {
+  pointerInteraction.value = true;
+  const focusedElement = document.activeElement;
+  if (
+    focusedElement instanceof HTMLElement &&
+    e.target instanceof Node &&
+    !focusedElement.contains(e.target)
+  ) {
+    focusedElement.blur();
+  }
   const target = (e.target as HTMLElement | null)?.closest?.(
     'button, .q-btn, [role="button"], [role="switch"]'
   );
@@ -834,6 +901,10 @@ onMounted(() => {
   });
 
   window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keydown', playbackShortcut.keydown, true);
+  window.addEventListener('keydown', recordingRestartShortcut, true);
+  window.addEventListener('keyup', playbackShortcut.keyup, true);
+  window.addEventListener('blur', playbackShortcut.reset);
   window.addEventListener('pointerdown', handleScrollPointer);
   window.addEventListener('pointerdown', handleGlobalPointerDown, true);
 });
@@ -844,6 +915,10 @@ onUnmounted(() => {
   }
   recorder.clearNoSpeechNotice();
   window.removeEventListener('keydown', handleKeyDown);
+  window.removeEventListener('keydown', playbackShortcut.keydown, true);
+  window.removeEventListener('keydown', recordingRestartShortcut, true);
+  window.removeEventListener('keyup', playbackShortcut.keyup, true);
+  window.removeEventListener('blur', playbackShortcut.reset);
   window.removeEventListener('pointerdown', handleScrollPointer);
   window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
   player.releaseLesson();
@@ -909,9 +984,9 @@ function togglePlay() {
     return;
   }
   recorder.stopPreview();
-  if (player.sound.value?.playing() || player.isShadowing.value) {
+  if (player.sound.value?.playing() || player.isShadowing.value || isRecording.value) {
     const sentence = player.currentSentence.value;
-    const wasShadowing = player.isShadowing.value;
+    const wasShadowing = player.isShadowing.value || isRecording.value;
     player.stopCurrentPlayback();
     if (wasShadowing && sentence) player.sound.value?.seek(sentence.start);
   } else {
@@ -989,6 +1064,7 @@ function toggleShadowingMode() {
   recorder.releaseRecordingResources();
   shadowingMode.value = !shadowingMode.value;
   zenMode.value = shadowingMode.value && practiceMethod.value !== 'listen';
+  practiceMenuVisible.value = false;
   if (player.currentSentence.value) {
     player.sound.value.seek(player.currentSentence.value.start);
   }
@@ -1286,9 +1362,137 @@ function releaseRecordingResources() {
   justify-content: center !important;
 }
 
-.practice-method-btn .q-icon.on-right,
-.practice-method-btn .q-icon--right {
-  margin-left: 1px !important;
+.primary-play--recording {
+  background-color: #de5555 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(222, 85, 85, 0.32) !important;
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+
+.primary-play--recording:hover {
+  background-color: #d14747 !important;
+}
+
+.primary-play--recording:active {
+  background-color: #c43c3c !important;
+}
+
+.recording-waveform {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3.5px;
+  height: 32px;
+  pointer-events: none;
+}
+
+.recording-waveform--restart {
+  animation: recording-restart 280ms ease-out;
+}
+
+@keyframes recording-restart {
+  from {
+    opacity: 0.4;
+    transform: scaleY(0.65);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+.waveform-bar {
+  display: block;
+  background-color: #ffffff;
+  border-radius: 999px;
+  transform-origin: center;
+  transition: height 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: height;
+}
+
+.waveform-bar--1,
+.waveform-bar--3 {
+  width: 3.5px;
+  height: 7px;
+}
+
+.waveform-bar--2 {
+  width: 4px;
+  height: 9.5px;
+}
+
+.recording-waveform--voice .waveform-bar--1,
+.recording-waveform--voice .waveform-bar--3 {
+  height: 20px;
+}
+
+.recording-waveform--voice .waveform-bar--2 {
+  height: 28px;
+}
+
+.focus-recording-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2010;
+  transition: opacity 160ms ease;
+}
+
+.focus-recording-enter-active,
+.focus-recording-leave-active {
+  transition: opacity 200ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.focus-recording-enter-from,
+.focus-recording-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(16px) scale(0.92);
+}
+
+.focus-recording-enter-to,
+.focus-recording-leave-from {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-waveform--restart {
+    animation: none;
+  }
+  .waveform-bar {
+    transition: none !important;
+  }
+  .focus-recording-enter-active,
+  .focus-recording-leave-active {
+    transition: opacity 100ms ease !important;
+    transform: translateX(-50%) !important;
+  }
+}
+
+.practice-label {
+  padding: 0 4px;
+  color: var(--ink);
+  font-size: var(--text-control);
+  font-weight: 500;
+}
+
+.practice-method-btn {
+  height: 28px;
+  min-height: 28px;
+  color: var(--ink);
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.practice-method-btn:hover {
+  color: var(--ink-strong);
+  background: var(--bg-hover);
+}
+
+.practice-method-btn .q-icon {
+  font-size: 20px;
+  margin-left: 2px;
+  color: var(--ink-muted);
 }
 
 .q-drawer {
@@ -1350,23 +1554,6 @@ function releaseRecordingResources() {
   color: var(--ink);
 }
 
-.floating-recording {
-  position: absolute;
-  top: -76px;
-  left: 50%;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 60px;
-  height: 60px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-
 .practice-controls,
 .playback-options {
   display: flex;
@@ -1389,7 +1576,7 @@ function releaseRecordingResources() {
   justify-content: flex-end;
 }
 .practice-menu {
-  width: 360px;
+  width: 180px;
   max-width: 90vw;
 }
 
@@ -1403,7 +1590,7 @@ function releaseRecordingResources() {
   align-items: center;
   gap: 8px;
   min-height: 32px;
-  padding: 4px 10px 4px 6px;
+  padding: 4px 6px;
   color: var(--ink);
   font: inherit;
   cursor: pointer;
@@ -1452,53 +1639,11 @@ function releaseRecordingResources() {
   transform: translateX(16px);
 }
 
-.floating-phase {
-  position: absolute;
-  bottom: calc(100% + 24px);
-  left: 50%;
-  transform: translateX(-50%);
-  display: grid;
-  width: 60px;
-  height: 60px;
-  place-items: center;
-  padding: 0;
-  color: var(--ink-muted);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-@media (max-width: 850px) {
-  .playback-toolbar {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+@media (max-width: 600px) {
+  .loop-mode-control,
+  .playback-rate-control {
+    display: none;
   }
-  .practice-controls {
-    min-width: 0;
-  }
-  .sentence-navigation {
-    grid-column: 1 / -1;
-    justify-self: center;
-  }
-  .practice-controls {
-    grid-column: 1 / 3;
-    grid-row: 2;
-  }
-  .playback-options {
-    grid-column: 3;
-    grid-row: 2;
-  }
-}
-
-.recording-float-enter-active,
-.recording-float-leave-active {
-  transition: opacity 150ms ease, transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.recording-float-enter-from,
-.recording-float-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 4px) scale(0.95);
 }
 
 .sr-only {
@@ -1511,91 +1656,5 @@ function releaseRecordingResources() {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-.recording-mic {
-  --recording-accent: #78716c;
-  box-sizing: border-box;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  color: var(--recording-accent);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-strong);
-  transition: color 200ms ease, background 200ms ease;
-}
-
-.recording-mic--floating {
-  width: 60px;
-  height: 60px;
-}
-
-.recording-mic::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border: 1px solid var(--recording-accent);
-  border-radius: inherit;
-  opacity: 0.15;
-  animation: recording-breathe 2.4s ease-in-out infinite;
-}
-
-.recording-mic > .q-icon {
-  z-index: 1;
-}
-
-.recording-mic--active {
-  --recording-accent: #44403c;
-}
-
-.recording-mic--active::before {
-  animation: recording-ripple 1.8s ease-out infinite;
-}
-
-.recording-mic--first {
-  --recording-accent: #78716c;
-}
-
-.recording-mic--first::before {
-  border: 2px dashed var(--recording-accent);
-}
-
-.recording-mic--first.recording-mic--active {
-  --recording-accent: #44403c;
-}
-
-.recording-mic--silent {
-  --recording-accent: #a8a29e;
-}
-
-.recording-mic--silent::before {
-  animation: recording-ripple 900ms ease-out both;
-}
-
-@keyframes recording-breathe {
-  0%,
-  100% {
-    opacity: 0.12;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.2;
-    transform: scale(1.03);
-  }
-}
-
-@keyframes recording-ripple {
-  0% {
-    opacity: 0.2;
-    transform: scale(0.96);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.4);
-  }
 }
 </style>

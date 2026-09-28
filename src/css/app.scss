@@ -516,17 +516,17 @@ button:focus-visible,
   transition: opacity 200ms ease, transform 200ms ease;
 }
 
-.focus-footer .floating-recording,
-.focus-footer .floating-phase {
-  transition: opacity 200ms ease, transform 200ms ease;
-}
-
 @media (hover: hover) and (pointer: fine) {
-  .focus-footer:not(:hover):not(:has(:focus-visible)):not(.controls-menu-open) .playback-toolbar,
-  .focus-footer:not(:hover):not(:has(:focus-visible)):not(.controls-menu-open) .floating-recording,
-  .focus-footer:not(:hover):not(:has(:focus-visible)):not(.controls-menu-open) .floating-phase {
+  .focus-footer:not(:hover):not(:has(:focus-visible)):not(.controls-menu-open) .playback-toolbar {
     opacity: 0;
     transform: translateY(100%);
+    pointer-events: none;
+  }
+
+  .focus-footer:hover .focus-recording-btn,
+  .focus-footer:has(:focus-visible) .focus-recording-btn,
+  .focus-footer.controls-menu-open .focus-recording-btn {
+    opacity: 0;
     pointer-events: none;
   }
 }

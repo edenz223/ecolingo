@@ -109,6 +109,39 @@ export class ZenCoordinator {
     });
   }
 
+  recordCurrentSentence() {
+    if (this.recorder.isPreparingRecording.value) return;
+    if (this.recorder.isRecording.value) {
+      void this.recorder.restartSentenceRecording();
+      return;
+    }
+    const sentence = this.player.currentSentence.value;
+    if (!sentence || (!this.player.sound.value?.playing() && !this.recorder.previewClipId.value)) return;
+
+    this.player.sound.value?.pause();
+    if (this.player.stepTimerId) {
+      clearTimeout(this.player.stepTimerId);
+      this.player.stepTimerId = null;
+    }
+    if (this.player.currentPause) {
+      clearTimeout(this.player.currentPause);
+      this.player.currentPause = null;
+    }
+    this.recorder.stopPreview();
+    this.shadowingMode.value = true;
+    this.zenMode.value = this.practiceMethod.value !== 'listen';
+    if (this.zenMode.value) this.zenPhase.value = 'second';
+    this.player.isShadowing.value = true;
+    void this.recorder.startSentenceRecordingWithCue(sentence, {
+      lessonName: this.player.currentLesson?.name || '',
+      loadSessionId: this.player.loadSessionId,
+      zenMode: this.zenMode.value,
+      zenPhase: this.zenPhase.value,
+      zenSession: this.zenSession,
+      shadowingMode: true,
+    });
+  }
+
   playZenReference(sentence: Sentence) {
     this.zenPhase.value = 'reference';
     this.player.isShadowing.value = false;

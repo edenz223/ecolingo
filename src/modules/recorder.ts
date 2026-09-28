@@ -2,6 +2,16 @@ import { ref, type Ref } from 'vue';
 import type { Sentence } from '../types/subtitles';
 import type { RecordingMetadata, RecordingClip } from '../types/recording';
 import { createVoiceMonitor } from '../utils/voice-activity';
+import { playRecordingRestartCue } from '../utils/recording-cue';
+
+interface RecordingOptions {
+  lessonName: string;
+  loadSessionId: number;
+  zenMode?: boolean;
+  zenPhase?: string | null;
+  zenSession?: number;
+  shadowingMode?: boolean;
+}
 
 export interface RecorderCallbacks {
   onNoSpeech?: (sentence: Sentence) => void;
@@ -46,6 +56,10 @@ export class RecorderManager {
   noSpeechNoticeTimer: ReturnType<typeof setTimeout> | null;
   pendingSaves: Set<Promise<any>>;
   callbacks: RecorderCallbacks;
+  activeRecordingRequest: { sentence: Sentence; options: RecordingOptions } | null = null;
+  restartCue: ReturnType<typeof playRecordingRestartCue> | null = null;
+  isPreparingRecording = ref(false);
+  recordingRevision = ref(0);
 
   constructor(callbacks: RecorderCallbacks = {}) {
     this.isRecording = ref(false);
@@ -130,12 +144,13 @@ export class RecorderManager {
         this.voiceMonitor = monitor;
         await monitor.ready();
         if (accessSession !== this.microphoneSession) return false;
-        this.mediaRecorder.addEventListener('dataavailable', (e) =>
-          this.handleRecorderData(e)
-        );
-        this.mediaRecorder.addEventListener('stop', () =>
-          this.handleRecorderStop()
-        );
+        const mediaRecorder = this.mediaRecorder;
+        mediaRecorder.addEventListener('dataavailable', (e) => {
+          if (this.mediaRecorder === mediaRecorder) this.handleRecorderData(e);
+        });
+        mediaRecorder.addEventListener('stop', () => {
+          if (this.mediaRecorder === mediaRecorder) this.handleRecorderStop();
+        });
         this.recordingError.value = '';
         return true;
       })
@@ -166,14 +181,7 @@ export class RecorderManager {
 
   startSentenceRecording(
     sentence: Sentence,
-    options: {
-      lessonName: string;
-      loadSessionId: number;
-      zenMode?: boolean;
-      zenPhase?: string | null;
-      zenSession?: number;
-      shadowingMode?: boolean;
-    }
+    options: RecordingOptions
   ) {
     this.clearNoSpeechNotice();
     if (!sentence) return;
@@ -187,6 +195,7 @@ export class RecorderManager {
       .then(async (ready) => {
         if (attempt !== this.recordingAttempt) return;
         if (!ready) {
+          this.isPreparingRecording.value = false;
           this.callbacks.stopPlayback?.();
           this.callbacks.seekSentence?.(sentence.start);
           return;
@@ -205,6 +214,7 @@ export class RecorderManager {
           this.callbacks.getLoadSessionId?.() !== sessionId ||
           this.callbacks.getCurrentSentence?.() !== sentence
         ) {
+          if (attempt === this.recordingAttempt) this.isPreparingRecording.value = false;
           return;
         }
 
@@ -230,6 +240,8 @@ export class RecorderManager {
         };
 
         this.isRecording.value = true;
+        this.isPreparingRecording.value = false;
+        this.activeRecordingRequest = { sentence, options: { ...options } };
         this.recordingChunks = [];
         this.mediaRecorder.start();
         this.recordingStartedAt = performance.now();
@@ -263,6 +275,54 @@ export class RecorderManager {
         this.releaseRecordingResources();
         this.recordingError.value = `录音启动失败：${error.message}`;
       });
+  }
+
+  async restartSentenceRecording() {
+    const mediaRecorder = this.mediaRecorder;
+    const request = this.activeRecordingRequest;
+    if (this.isPreparingRecording.value || !this.isRecording.value || mediaRecorder?.state !== 'recording' || !request) return;
+
+    // Wait for final dataavailable/stop before reusing the recorder.
+    const stopped = new Promise<void>((resolve) => {
+      mediaRecorder.addEventListener('stop', () => resolve(), { once: true });
+    });
+    this.stopSentenceRecording(true);
+    this.isPreparingRecording.value = true;
+    this.recordingRevision.value++;
+    const attempt = this.recordingAttempt;
+    await stopped;
+    if (this.mediaRecorder !== mediaRecorder) return;
+    await this.prepareRecordingWithCue(request.sentence, request.options, attempt);
+  }
+
+  startSentenceRecordingWithCue(sentence: Sentence, options: RecordingOptions) {
+    if (this.isPreparingRecording.value || this.isRecording.value) return;
+    this.isPreparingRecording.value = true;
+    this.recordingRevision.value++;
+    return this.prepareRecordingWithCue(sentence, options, ++this.recordingAttempt);
+  }
+
+  private async prepareRecordingWithCue(sentence: Sentence, options: RecordingOptions, attempt: number) {
+    const isCurrent = () =>
+      attempt === this.recordingAttempt &&
+      this.callbacks.isShadowingActive?.() &&
+      this.callbacks.getLoadSessionId?.() === options.loadSessionId &&
+      this.callbacks.getCurrentSentence?.() === sentence;
+    const clearIfCancelled = () => {
+      if (isCurrent()) return false;
+      if (attempt === this.recordingAttempt) this.isPreparingRecording.value = false;
+      return true;
+    };
+
+    if (clearIfCancelled()) return;
+    this.recordingStatus.value = '准备重新录制…';
+    const cue = playRecordingRestartCue();
+    this.restartCue = cue;
+    await cue.finished;
+    if (this.restartCue === cue) this.restartCue = null;
+    if (clearIfCancelled()) return;
+    // Preserve the current Zen phase; do not replay the reference or advance.
+    this.startSentenceRecording(sentence, options);
   }
 
   finishShadowing(
@@ -301,6 +361,9 @@ export class RecorderManager {
   }
 
   stopSentenceRecording(discard = false) {
+    this.isPreparingRecording.value = false;
+    this.restartCue?.cancel();
+    this.restartCue = null;
     this.recordingVoiceActive.value = false;
     this.recordingAttempt++;
     this.voiceMonitor?.stop();
@@ -425,6 +488,7 @@ export class RecorderManager {
   }
 
   resetRecordingState() {
+    this.activeRecordingRequest = null;
     this.recordingVoiceActive.value = false;
     this.recordingStatus.value = '';
     this.isRecording.value = false;
@@ -490,6 +554,9 @@ export class RecorderManager {
   }
 
   releaseRecordingResources() {
+    this.isPreparingRecording.value = false;
+    this.restartCue?.cancel();
+    this.restartCue = null;
     this.recordingAttempt++;
     this.completedShadow = null;
     this.voiceMonitor?.dispose();

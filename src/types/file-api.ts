@@ -4,7 +4,8 @@ export interface FileAPI {
   platform: string;
   readTextFile(filePath: string): Promise<string>;
   onFolderSelected(callback: (event: any, values: Lesson[]) => void): void;
-  openFolder(): Promise<void>;
+  openFolder(mode?: 'files' | 'directory'): Promise<void>;
+  openFiles?(): Promise<void>;
   recordingIdentity(lesson: Lesson): Promise<string>;
   listRecordings(lessonId?: string | null): Promise<RecordingClip[]>;
   saveRecording(meta: RecordingMetadata, bytes: ArrayBuffer): Promise<RecordingClip>;
@@ -15,6 +16,8 @@ export interface FileAPI {
   close?(): Promise<void>;
   isMaximized?(): Promise<boolean>;
   onMaximizedChange?(callback: (isMax: boolean) => void): void;
+  getAudioUrl?(audioPath: string, lesson?: Lesson): Promise<string>;
+  releaseAudioUrl?(url: string): void;
 }
 
 declare global {

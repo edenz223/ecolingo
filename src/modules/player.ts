@@ -17,7 +17,11 @@ export interface PlayerCallbacks {
   onReleaseLesson?: () => void;
   onTogglePlay?: () => void;
   isZenReferencePlaying?: () => boolean;
-  handleZenClick?: (sentence: Sentence, forcePlay: boolean, wasPlayingZenReference: boolean) => boolean;
+  handleZenClick?: (
+    sentence: Sentence,
+    forcePlay: boolean,
+    wasPlayingZenReference: boolean
+  ) => boolean;
   stopPreview?: () => void;
 }
 
@@ -44,6 +48,7 @@ export class Player {
   isShadowing: Ref<boolean>;
   playbackRate: Ref<number>;
   callbacks: PlayerCallbacks;
+  currentAudioUrl: string | null;
 
   constructor(options: PlayerOptions = {}) {
     this.loadSessionId = 0;
@@ -60,6 +65,7 @@ export class Player {
     this.isShadowing = ref(false);
     this.playbackRate = options.playbackRate || ref(1);
     this.callbacks = options.callbacks || {};
+    this.currentAudioUrl = null;
   }
 
   setCallbacks(callbacks: Partial<PlayerCallbacks>) {
@@ -87,11 +93,19 @@ export class Player {
       if (!readFn) throw new Error('无法读取字幕文件：缺少 readTextFile 接口');
       const content = await readFn(lyricsPath);
       if (sessionId !== this.loadSessionId) return;
-      const sentences = lyricsPath.endsWith('.srt')
-        ? parseSRT(content)
-        : parseLRC(content);
+      const sentences = lyricsPath.endsWith('.srt') ? parseSRT(content) : parseLRC(content);
       if (!sentences.length) throw new Error('字幕中没有可用的句子，请检查字幕文件。');
-      this.initializeSound(audioFilePath, sentences, sessionId, onReady);
+
+      let resolvedAudioPath = audioFilePath;
+      if (typeof window !== 'undefined' && window.fileAPI?.getAudioUrl) {
+        resolvedAudioPath = await window.fileAPI.getAudioUrl(audioFilePath, lesson);
+        if (sessionId !== this.loadSessionId) {
+          window.fileAPI.releaseAudioUrl?.(resolvedAudioPath);
+          return;
+        }
+      }
+      this.currentAudioUrl = resolvedAudioPath;
+      this.initializeSound(resolvedAudioPath, sentences, sessionId, onReady);
     } catch (error: any) {
       if (sessionId === this.loadSessionId) {
         this.callbacks.onLoadingChange?.(false);
@@ -106,6 +120,10 @@ export class Player {
     this.callbacks.onReleaseLesson?.();
     this.loadSessionId++;
     this.stopCurrentPlayback();
+    if (this.currentAudioUrl && typeof window !== 'undefined' && window.fileAPI?.releaseAudioUrl) {
+      window.fileAPI.releaseAudioUrl(this.currentAudioUrl);
+    }
+    this.currentAudioUrl = null;
     if (this.stepTimerId) {
       clearTimeout(this.stepTimerId);
       this.stepTimerId = null;
@@ -120,7 +138,12 @@ export class Player {
     this.isScrolling.value = false;
   }
 
-  initializeSound(audioFilePath: string, sentences: Sentence[], sessionId: number, onReady?: () => void) {
+  initializeSound(
+    audioFilePath: string,
+    sentences: Sentence[],
+    sessionId: number,
+    onReady?: () => void
+  ) {
     const sound = new Howl({
       preload: false,
       src: [audioFilePath],
@@ -222,7 +245,8 @@ export class Player {
     const sentence = this.currentSentence.value;
     if (!sentence) return undefined;
     this.completedPasses++;
-    if (this.loopMode.value === 'one' && this.completedPasses < this.repeatCount.value) return sentence;
+    if (this.loopMode.value === 'one' && this.completedPasses < this.repeatCount.value)
+      return sentence;
     this.completedPasses = 0;
     return this.getNextSentence();
   }
@@ -247,7 +271,8 @@ export class Player {
   findCurrentSentence(currentTime: number): Sentence | undefined {
     const sentences = this.parsedSentences.value;
     const currentSentence = sentences.find((sentence, index) => {
-      const prevEnd = index > 0 && sentences[index - 1].end !== undefined ? sentences[index - 1].end! : 0;
+      const prevEnd =
+        index > 0 && sentences[index - 1].end !== undefined ? sentences[index - 1].end! : 0;
       const end = sentence.end !== undefined ? sentence.end : Infinity;
       return currentTime >= prevEnd && currentTime < end;
     });
@@ -263,7 +288,11 @@ export class Player {
     if (typeof document !== 'undefined') {
       const element = document.getElementById(sentence.start.toString());
       element?.scrollIntoView({
-        behavior: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        behavior:
+          typeof window !== 'undefined' &&
+          window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+            ? 'auto'
+            : 'smooth',
         block: 'center',
       });
     }

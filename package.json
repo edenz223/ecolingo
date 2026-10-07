@@ -11,11 +11,15 @@
     "test": "echo \"No test specified\" && exit 0",
     "test:recordings": "node --test tests/recording-store.test.cjs",
     "dev": "quasar dev -m electron",
-    "build": "quasar build --mode electron"
+    "build": "quasar build --mode electron",
+    "dev:pwa": "quasar dev -m pwa",
+    "dev:pwa:https": "quasar dev -m pwa --https",
+    "build:pwa": "quasar build -m pwa"
   },
   "dependencies": {
     "@quasar/extras": "^1.16.4",
     "howler": "^2.2.4",
+    "js-sha256": "^1.0.0",
     "jschardet": "^3.0.0",
     "quasar": "^2.8.0",
     "sql.js": "^1.14.2",
@@ -38,7 +42,14 @@
     "postcss": "^8.4.14",
     "prettier": "^2.5.1",
     "typescript": "~5.7.3",
-    "vite-plugin-checker": "^0.6.4"
+    "vite-plugin-checker": "^0.6.4",
+    "workbox-build": "^7.0.0",
+    "workbox-cacheable-response": "^7.0.0",
+    "workbox-core": "^7.0.0",
+    "workbox-expiration": "^7.0.0",
+    "workbox-precaching": "^7.0.0",
+    "workbox-routing": "^7.0.0",
+    "workbox-strategies": "^7.0.0"
   },
   "engines": {
     "node": "^20 || ^18 || ^16",

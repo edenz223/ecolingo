@@ -51,7 +51,18 @@ export function createVoiceActivityDetector(
 }
 
 export function createVoiceMonitor(stream: MediaStream): VoiceMonitor {
-  const context = new AudioContext();
+  const AudioContextClass =
+    typeof window !== 'undefined'
+      ? window.AudioContext || (window as any).webkitAudioContext
+      : typeof AudioContext !== 'undefined'
+      ? AudioContext
+      : null;
+
+  if (!AudioContextClass) {
+    throw new Error('当前浏览器环境不支持 Web Audio API');
+  }
+
+  const context = new AudioContextClass();
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
   analyser.fftSize = 2048;
@@ -70,8 +81,13 @@ export function createVoiceMonitor(stream: MediaStream): VoiceMonitor {
 
   return {
     async ready(): Promise<void> {
-      await context.resume();
-      if (context.state !== 'running') throw new Error('麦克风声音检测未能启动');
+      if (context.state === 'suspended') {
+        try {
+          await context.resume();
+        } catch {
+          // 在某些移动端环境下忽略非关键恢复异常
+        }
+      }
     },
     start(onUpdate: (result: VADResult) => void, options: VADOptions = {}): void {
       stop();

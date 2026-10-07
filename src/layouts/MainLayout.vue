@@ -9,12 +9,28 @@
         <div class="titlebar-leading">
           <span class="app-brand">EcoLingo</span>
           <button
+            v-if="!isWeb"
             type="button"
             class="titlebar-menu-btn"
             aria-label="打开文件夹"
             @click.stop="openFolder"
           >
             文件
+          </button>
+          <button v-else type="button" class="titlebar-menu-btn" aria-label="导入文件或文件夹">
+            文件
+            <q-menu auto-close>
+              <q-list dense style="min-width: 140px">
+                <q-item clickable @click="openFiles">
+                  <q-item-section avatar><q-icon name="audio_file" size="18px" /></q-item-section>
+                  <q-item-section>选择课程文件</q-item-section>
+                </q-item>
+                <q-item clickable @click="openFolder">
+                  <q-item-section avatar><q-icon name="folder_open" size="18px" /></q-item-section>
+                  <q-item-section>选择课程文件夹</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
           </button>
           <button
             type="button"
@@ -25,7 +41,7 @@
             帮助
           </button>
         </div>
-        <div v-if="!isMac" class="window-controls">
+        <div v-if="!isMac && !isWeb" class="window-controls">
           <button
             type="button"
             class="window-control-btn"
@@ -200,8 +216,29 @@
         <div v-if="!player.parsedSentences.value.length" class="lesson-empty">
           <q-icon name="headphones" size="48px" color="primary" />
           <div class="text-h6">{{ lessonLoading ? '正在打开课程…' : '开始今天的跟读' }}</div>
-          <div class="text-grey-7">选择包含音频和字幕的文件夹</div>
+          <div class="text-grey-7">
+            选择包含同名音频（如 .mp3）和字幕（如 .lrc/.srt）的文件或文件夹
+          </div>
+          <div v-if="isWeb" class="row q-gutter-sm justify-center q-mt-sm">
+            <q-btn
+              unelevated
+              color="primary"
+              icon="audio_file"
+              label="选择课程文件 (多选)"
+              :loading="lessonLoading"
+              @click="openFiles"
+            />
+            <q-btn
+              outline
+              color="primary"
+              icon="folder_open"
+              label="选择课程文件夹"
+              :loading="lessonLoading"
+              @click="openFolder"
+            />
+          </div>
           <q-btn
+            v-else
             unelevated
             color="primary"
             icon="folder_open"
@@ -581,6 +618,7 @@ const loopModes = [
 const settings = loadSettings();
 const isWindows = window.fileAPI?.platform === 'win32';
 const isMac = window.fileAPI?.platform === 'darwin';
+const isWeb = !window.fileAPI || window.fileAPI?.platform === 'web';
 const isMaximized = ref(false);
 
 async function minimizeWindow() {
@@ -997,7 +1035,14 @@ function togglePlay() {
 function loadLocalLessons() {
   const localLessons = localStorage.getItem('lessons');
   if (localLessons) {
-    lessons.value = JSON.parse(localLessons);
+    try {
+      lessons.value = JSON.parse(localLessons);
+      if (lessons.value.length > 0 && !player.currentLesson) {
+        playLesson(0);
+      }
+    } catch {
+      lessons.value = [];
+    }
   }
 }
 
@@ -1005,6 +1050,7 @@ function handleOpenFolderResult(values: Lesson[]) {
   if (values && values.length > 0) {
     lessons.value = values;
     localStorage.setItem('lessons', JSON.stringify(values));
+    playLesson(0);
   }
 }
 
@@ -1055,7 +1101,15 @@ function next() {
 }
 
 function openFolder() {
-  window.fileAPI?.openFolder();
+  window.fileAPI?.openFolder?.('directory');
+}
+
+function openFiles() {
+  if (window.fileAPI?.openFiles) {
+    window.fileAPI.openFiles();
+  } else {
+    window.fileAPI?.openFolder?.('files');
+  }
 }
 
 function toggleShadowingMode() {
@@ -1065,6 +1119,9 @@ function toggleShadowingMode() {
   shadowingMode.value = !shadowingMode.value;
   zenMode.value = shadowingMode.value && practiceMethod.value !== 'listen';
   practiceMenuVisible.value = false;
+  if (shadowingMode.value) {
+    void recorder.ensureRecorderAccess();
+  }
   if (player.currentSentence.value) {
     player.sound.value.seek(player.currentSentence.value.start);
   }

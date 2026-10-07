@@ -15,11 +15,7 @@ interface RecordingOptions {
 
 export interface RecorderCallbacks {
   onNoSpeech?: (sentence: Sentence) => void;
-  onRecordingComplete?: (
-    completion: any,
-    meta: RecordingMetadata,
-    blob: Blob
-  ) => void;
+  onRecordingComplete?: (completion: any, meta: RecordingMetadata, blob: Blob) => void;
   stopPlayback?: () => void;
   isShadowingActive?: () => boolean;
   isShadowingModeActive?: () => boolean;
@@ -126,26 +122,50 @@ export class RecorderManager {
       !hasNavigator ||
       !navigator.mediaDevices?.getUserMedia
     ) {
-      this.recordingError.value = '当前环境不支持录音，请使用桌面应用。';
+      const isNonSecure =
+        typeof window !== 'undefined' &&
+        window.isSecureContext === false &&
+        location.protocol !== 'https:' &&
+        location.hostname !== 'localhost' &&
+        location.hostname !== '127.0.0.1';
+      this.recordingError.value = isNonSecure
+        ? '浏览器安全限制：非 localhost 的 HTTP 访问无法调用麦克风。电脑端请使用 http://localhost:8080 访问；手机端请参考说明配置信任。'
+        : '当前环境未检测到麦克风，或麦克风权限被拒绝，请检查设备与浏览器权限。';
       return false;
     }
 
     const accessSession = this.microphoneSession;
     this.recorderInitPromise = navigator.mediaDevices
       .getUserMedia({ audio: true })
-      .then(async (stream) => {
+      .then(async stream => {
         if (accessSession !== this.microphoneSession) {
-          stream.getTracks().forEach((track) => track.stop());
+          stream.getTracks().forEach(track => track.stop());
           return false;
         }
         this.mediaStream = stream;
-        this.mediaRecorder = new MediaRecorder(stream);
+        let preferredMime = '';
+        const candidateMimes = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/mp4',
+          'audio/ogg;codecs=opus',
+          'audio/wav',
+        ];
+        if (
+          typeof MediaRecorder !== 'undefined' &&
+          typeof MediaRecorder.isTypeSupported === 'function'
+        ) {
+          preferredMime = candidateMimes.find(m => MediaRecorder.isTypeSupported(m)) || '';
+        }
+        this.mediaRecorder = preferredMime
+          ? new MediaRecorder(stream, { mimeType: preferredMime })
+          : new MediaRecorder(stream);
         const monitor = createVoiceMonitor(stream);
         this.voiceMonitor = monitor;
         await monitor.ready();
         if (accessSession !== this.microphoneSession) return false;
         const mediaRecorder = this.mediaRecorder;
-        mediaRecorder.addEventListener('dataavailable', (e) => {
+        mediaRecorder.addEventListener('dataavailable', e => {
           if (this.mediaRecorder === mediaRecorder) this.handleRecorderData(e);
         });
         mediaRecorder.addEventListener('stop', () => {
@@ -179,10 +199,7 @@ export class RecorderManager {
     return this.recorderInitPromise;
   }
 
-  startSentenceRecording(
-    sentence: Sentence,
-    options: RecordingOptions
-  ) {
+  startSentenceRecording(sentence: Sentence, options: RecordingOptions) {
     this.clearNoSpeechNotice();
     if (!sentence) return;
 
@@ -192,7 +209,7 @@ export class RecorderManager {
     this.recordingStatus.value = '正在准备麦克风…';
 
     this.ensureRecorderAccess()
-      .then(async (ready) => {
+      .then(async ready => {
         if (attempt !== this.recordingAttempt) return;
         if (!ready) {
           this.isPreparingRecording.value = false;
@@ -201,7 +218,7 @@ export class RecorderManager {
           return;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 500));
         const shadowingActive = this.callbacks.isShadowingModeActive
           ? this.callbacks.isShadowingModeActive()
           : Boolean(options.shadowingMode);
@@ -226,8 +243,7 @@ export class RecorderManager {
         }
         this.stopPreview();
 
-        const duration =
-          Math.max((sentence.end ?? sentence.start) - sentence.start, 0) || 0;
+        const duration = Math.max((sentence.end ?? sentence.start) - sentence.start, 0) || 0;
 
         this.pendingRecordingSentence = {
           lessonId: this.activeLessonId || '',
@@ -280,10 +296,16 @@ export class RecorderManager {
   async restartSentenceRecording() {
     const mediaRecorder = this.mediaRecorder;
     const request = this.activeRecordingRequest;
-    if (this.isPreparingRecording.value || !this.isRecording.value || mediaRecorder?.state !== 'recording' || !request) return;
+    if (
+      this.isPreparingRecording.value ||
+      !this.isRecording.value ||
+      mediaRecorder?.state !== 'recording' ||
+      !request
+    )
+      return;
 
     // Wait for final dataavailable/stop before reusing the recorder.
-    const stopped = new Promise<void>((resolve) => {
+    const stopped = new Promise<void>(resolve => {
       mediaRecorder.addEventListener('stop', () => resolve(), { once: true });
     });
     this.stopSentenceRecording(true);
@@ -302,7 +324,11 @@ export class RecorderManager {
     return this.prepareRecordingWithCue(sentence, options, ++this.recordingAttempt);
   }
 
-  private async prepareRecordingWithCue(sentence: Sentence, options: RecordingOptions, attempt: number) {
+  private async prepareRecordingWithCue(
+    sentence: Sentence,
+    options: RecordingOptions,
+    attempt: number
+  ) {
     const isCurrent = () =>
       attempt === this.recordingAttempt &&
       this.callbacks.isShadowingActive?.() &&
@@ -398,11 +424,7 @@ export class RecorderManager {
     const shouldDiscard = this.discardNextRecording;
     this.discardNextRecording = false;
 
-    if (
-      shouldDiscard ||
-      !this.pendingRecordingSentence ||
-      this.recordingChunks.length === 0
-    ) {
+    if (shouldDiscard || !this.pendingRecordingSentence || this.recordingChunks.length === 0) {
       this.resetRecordingState();
       if (!shouldDiscard && completion) this.callbacks.stopPlayback?.();
       return;
@@ -412,8 +434,7 @@ export class RecorderManager {
       type: this.mediaRecorder?.mimeType || 'audio/webm',
     });
 
-    this.pendingRecordingSentence.duration =
-      (performance.now() - this.recordingStartedAt) / 1000;
+    this.pendingRecordingSentence.duration = (performance.now() - this.recordingStartedAt) / 1000;
 
     if (completion?.zenPhase) {
       const meta = this.pendingRecordingSentence;
@@ -475,10 +496,7 @@ export class RecorderManager {
   ) {
     if (!lessonId) return;
     const clips = await window.fileAPI.listRecordings(lessonId);
-    if (
-      sessionId !== this.callbacks.getLoadSessionId?.() ||
-      lessonId !== this.activeLessonId
-    )
+    if (sessionId !== this.callbacks.getLoadSessionId?.() || lessonId !== this.activeLessonId)
       return;
     const latest: Record<number, RecordingClip> = {};
     for (const clip of clips) {
@@ -572,7 +590,7 @@ export class RecorderManager {
     }
 
     if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop());
+      this.mediaStream.getTracks().forEach(track => track.stop());
       this.mediaStream = null;
     }
     this.resetRecordingState();

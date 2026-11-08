@@ -105,7 +105,7 @@
       :is-playing="session.isPlaybackActive()"
       :is-recording="isRecording"
       :recording-revision="recordingRevision"
-      :recording-voice-active="recordingVoiceActive"
+      :recording-level="recordingLevel"
       :shadowing-mode="shadowingMode"
       :practice-method="practiceMethod"
       :loop-mode="player.loopMode.value"
@@ -172,7 +172,7 @@ const {
   activeError,
   practiceStatus,
   recordingRevision,
-  recordingVoiceActive,
+  recordingLevel,
   recordings,
   noSpeechSentence,
   previewClipId,

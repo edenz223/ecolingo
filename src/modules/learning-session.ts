@@ -563,7 +563,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     comparePhase: compare.phase,
     compareSentenceStart: compare.sentenceStart,
     recordingRevision: recorder.recordingRevision,
-    recordingVoiceActive: recorder.recordingVoiceActive,
+    recordingLevel: recorder.recordingLevel,
     recordingStatus: recorder.recordingStatus,
     recordings: recorder.recordings,
     noSpeechSentence: recorder.noSpeechSentence,

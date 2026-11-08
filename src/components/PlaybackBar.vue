@@ -18,7 +18,7 @@
       >
         <RecordingWaveform
           :key="recordingRevision"
-          :voice-active="recordingVoiceActive"
+          :level="recordingLevel"
           :restarted="recordingRevision > 0"
         />
         <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
@@ -56,7 +56,7 @@
           <RecordingWaveform
             v-if="isRecording"
             :key="recordingRevision"
-            :voice-active="recordingVoiceActive"
+            :level="recordingLevel"
             :restarted="recordingRevision > 0"
           />
           <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
@@ -251,7 +251,8 @@ const props = defineProps<{
   isPlaying: boolean;
   isRecording: boolean;
   recordingRevision: number;
-  recordingVoiceActive: boolean;
+  // Smoothed microphone loudness, 0 to 1.
+  recordingLevel: number;
   shadowingMode: boolean;
   practiceMethod: PracticeMethod;
   loopMode: LoopMode;

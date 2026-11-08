@@ -17,7 +17,7 @@ function runUiSmoke({ prefix, lessonName = '002 02', window = {}, switches = {} 
   fs.writeFileSync(preload, `
     const { contextBridge } = require('electron');
     const fs = require('node:fs');
-    const folder = ${JSON.stringify(path.join(root, 'resources'))};
+    const folder = ${JSON.stringify(path.join(root, 'tests/fixtures'))};
     let selected;
     const lesson = { name: ${JSON.stringify(lessonName)}, audio: { path: folder, name: '002 02.mp3' }, lyrics: { path: folder, name: '002 02.lrc' } };
     contextBridge.exposeInMainWorld('fileAPI', {

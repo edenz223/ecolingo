@@ -21,9 +21,7 @@
           :voice-active="recordingVoiceActive"
           :restarted="recordingRevision > 0"
         />
-        <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-          >录音中 · 空格停止 · R 重录</q-tooltip
-        >
+        <HintTooltip>录音中 · 空格停止 · R 重录</HintTooltip>
       </q-btn>
     </Transition>
     <q-toolbar class="wrap playback-toolbar">
@@ -37,9 +35,7 @@
           :disable="!hasSentence"
           @click="emit('previous-sentence')"
         >
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-            >上一句 · A</q-tooltip
-          >
+          <HintTooltip>上一句 · A</HintTooltip>
         </q-btn>
         <q-btn
           round
@@ -59,8 +55,8 @@
             :voice-active="recordingVoiceActive"
             :restarted="recordingRevision > 0"
           />
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-            >{{ isRecording ? '录音中，R 重录' : isPlaying ? '暂停' : '播放' }} · 空格</q-tooltip
+          <HintTooltip
+            >{{ isRecording ? '录音中，R 重录' : isPlaying ? '暂停' : '播放' }} · 空格</HintTooltip
           >
         </q-btn>
         <q-btn
@@ -72,9 +68,7 @@
           :disable="!hasSentence"
           @click="emit('next-sentence')"
         >
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-            >下一句 · D</q-tooltip
-          >
+          <HintTooltip>下一句 · D</HintTooltip>
         </q-btn>
       </div>
 
@@ -89,9 +83,7 @@
           @click="emit('toggle-shadowing')"
         >
           <span class="ios-switch" aria-hidden="true"><span class="ios-switch__thumb" /></span>
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-            >{{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S</q-tooltip
-          >
+          <HintTooltip>{{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S</HintTooltip>
         </button>
         <span v-if="!shadowingMode" class="practice-label">跟读</span>
         <q-btn
@@ -107,10 +99,10 @@
           aria-haspopup="menu"
           :aria-expanded="practiceMenuVisible"
         >
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
+          <HintTooltip
             >练习方式：{{
               practiceMethods.find(method => method.id === practiceMethod)?.label || '选择练习方式'
-            }}</q-tooltip
+            }}</HintTooltip
           >
           <q-menu
             v-model="practiceMenuVisible"
@@ -171,9 +163,7 @@
               @repeat-change="emit('repeat-change', $event)"
             />
           </q-menu>
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-            >循环模式</q-tooltip
-          >
+          <HintTooltip>循环模式</HintTooltip>
         </q-btn>
 
         <q-btn
@@ -209,8 +199,8 @@
           :aria-expanded="moreMenuVisible"
           :disable="!hasLesson"
         >
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-            >{{ loopModeDescription }} · {{ formatPlaybackRate(playbackRate) }}x</q-tooltip
+          <HintTooltip
+            >{{ loopModeDescription }} · {{ formatPlaybackRate(playbackRate) }}x</HintTooltip
           >
           <q-menu
             v-model="moreMenuVisible"
@@ -237,6 +227,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import HintTooltip from './HintTooltip.vue';
 import LoopModeList from './LoopModeList.vue';
 import PlaybackRateList from './PlaybackRateList.vue';
 import RecordingWaveform from './RecordingWaveform.vue';

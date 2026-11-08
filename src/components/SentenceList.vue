@@ -39,13 +39,9 @@
             :aria-label="compareSentenceStart === s.start ? '停止对比' : '对比原声与我的录音'"
             @click.stop="emit('compare', s)"
           >
-            <q-tooltip
-              :delay="400"
-              :hide-delay="0"
-              :transition-duration="100"
-              class="small-tooltip"
-              >{{ compareSentenceStart === s.start ? '停止对比' : '对比原声与录音 · B' }}</q-tooltip
-            >
+            <HintTooltip>{{
+              compareSentenceStart === s.start ? '停止对比' : '对比原声与录音 · B'
+            }}</HintTooltip>
           </q-btn>
           <q-btn
             v-if="compareSentenceStart !== s.start"
@@ -58,15 +54,9 @@
             :aria-label="previewClipId === recordings[s.start].id ? '停止回放' : '播放此句最新录音'"
             @click.stop="emit('play-recording', s.start)"
           >
-            <q-tooltip
-              :delay="400"
-              :hide-delay="0"
-              :transition-duration="100"
-              class="small-tooltip"
-              >{{
-                previewClipId === recordings[s.start].id ? '停止回放' : '播放此句录音'
-              }}</q-tooltip
-            >
+            <HintTooltip>{{
+              previewClipId === recordings[s.start].id ? '停止回放' : '播放此句录音'
+            }}</HintTooltip>
           </q-btn>
         </q-item-section>
         <q-item-section v-else side class="sentence-actions" />
@@ -77,6 +67,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import HintTooltip from './HintTooltip.vue';
 import type { RecordingClip } from '../types/recording';
 import type { Sentence } from '../types/subtitles';
 

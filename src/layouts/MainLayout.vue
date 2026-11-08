@@ -47,11 +47,10 @@
       @open-folder="session.openFolder"
     />
 
-    <div v-if="dropActive" class="drop-overlay">
-      <div class="drop-overlay__card">
-        <q-icon name="folder_open" size="20px" />松开以打开课程文件夹
-      </div>
-    </div>
+    <FolderDropOverlay
+      @open-path="session.openFolderPath"
+      @unreadable="showHud('无法打开拖入的项目')"
+    />
 
     <q-page-container>
       <q-page padding class="learning-page" :class="{ 'learning-page--focus': focusMode }">
@@ -114,7 +113,7 @@
       :pointer-interaction="pointerInteraction"
       @update:menu-open="controlsMenuOpen = $event"
       @toggle-play="session.togglePlay"
-      @previous-sentence="session.beforeSentence"
+      @previous-sentence="session.previousSentence"
       @next-sentence="session.nextSentence"
       @toggle-shadowing="session.toggleShadowingMode"
       @select-practice-method="session.selectPracticeMethod"
@@ -136,6 +135,7 @@ import LessonHeading from '../components/LessonHeading.vue';
 import PlaybackBar from '../components/PlaybackBar.vue';
 import PracticeStatus from '../components/PracticeStatus.vue';
 import SentenceList from '../components/SentenceList.vue';
+import FolderDropOverlay from '../components/FolderDropOverlay.vue';
 import ShortcutsDialog from '../components/ShortcutsDialog.vue';
 import ZenStage from '../components/ZenStage.vue';
 import { createLearningSession } from '../modules/learning-session';
@@ -269,14 +269,14 @@ const keyboardShortcut = createKeyboardShortcuts({
   hasLesson: () => Boolean(player.sound.value),
   pauseFollowing: session.pauseFollowing,
   toggleShadowing: toggleShadowingFromKeyboard,
-  previousSentence: session.beforeSentence,
+  previousSentence: session.previousSentence,
   nextSentence: session.nextSentence,
   previousLesson: () => {
-    session.prev();
+    session.previousLesson();
     showLessonHud();
   },
   nextLesson: () => {
-    session.next();
+    session.nextLesson();
     showLessonHud();
   },
   compareSentence: compareFromKeyboard,
@@ -318,58 +318,20 @@ function handleGlobalPointerDown(e: Event) {
   }
 }
 
-// Dropping a folder (or a file inside one) opens it; without preventDefault
-// Electron would navigate the window to the dropped file.
-const dropActive = ref(false);
-let dragDepth = 0;
-
-function carriesFiles(event: DragEvent) {
-  return Array.from(event.dataTransfer?.types || []).includes('Files');
-}
-
-function handleDragEnter(event: DragEvent) {
-  if (!carriesFiles(event)) return;
-  event.preventDefault();
-  dragDepth++;
-  dropActive.value = true;
-}
-
-function handleDragOver(event: DragEvent) {
-  if (!carriesFiles(event)) return;
-  event.preventDefault();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-}
-
-function handleDragLeave(event: DragEvent) {
-  if (!carriesFiles(event)) return;
-  dragDepth = Math.max(0, dragDepth - 1);
-  if (!dragDepth) dropActive.value = false;
-}
-
-function handleDrop(event: DragEvent) {
-  event.preventDefault();
-  dragDepth = 0;
-  dropActive.value = false;
-  const file = event.dataTransfer?.files[0];
-  if (!file) return;
-  const droppedPath = window.fileAPI?.getPathForFile?.(file);
-  if (droppedPath) void session.openFolderPath(droppedPath);
-  else showHud('无法打开拖入的项目');
-}
+const windowListeners: [type: string, handler: (event: any) => void, capture: boolean][] = [
+  ['keydown', handleKeyDown, false],
+  ['keydown', playbackShortcut.keydown, true],
+  ['keydown', recordingRestartShortcut, true],
+  ['keyup', playbackShortcut.keyup, true],
+  ['blur', playbackShortcut.reset, false],
+  ['pointerdown', handleScrollPointer, false],
+  ['pointerdown', handleGlobalPointerDown, true],
+];
 
 onMounted(() => {
   session.start();
-  window.addEventListener('dragenter', handleDragEnter);
-  window.addEventListener('dragover', handleDragOver);
-  window.addEventListener('dragleave', handleDragLeave);
-  window.addEventListener('drop', handleDrop);
-  window.addEventListener('keydown', handleKeyDown);
-  window.addEventListener('keydown', playbackShortcut.keydown, true);
-  window.addEventListener('keydown', recordingRestartShortcut, true);
-  window.addEventListener('keyup', playbackShortcut.keyup, true);
-  window.addEventListener('blur', playbackShortcut.reset);
-  window.addEventListener('pointerdown', handleScrollPointer);
-  window.addEventListener('pointerdown', handleGlobalPointerDown, true);
+  for (const [type, handler, capture] of windowListeners)
+    window.addEventListener(type, handler, capture);
 });
 
 onUnmounted(() => {
@@ -377,44 +339,8 @@ onUnmounted(() => {
   if (focusMode.value) {
     window.fileAPI?.setFocusMode?.(false);
   }
-  window.removeEventListener('keydown', handleKeyDown);
-  window.removeEventListener('keydown', playbackShortcut.keydown, true);
-  window.removeEventListener('keydown', recordingRestartShortcut, true);
-  window.removeEventListener('keyup', playbackShortcut.keyup, true);
-  window.removeEventListener('blur', playbackShortcut.reset);
-  window.removeEventListener('pointerdown', handleScrollPointer);
-  window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
-  window.removeEventListener('dragenter', handleDragEnter);
-  window.removeEventListener('dragover', handleDragOver);
-  window.removeEventListener('dragleave', handleDragLeave);
-  window.removeEventListener('drop', handleDrop);
+  for (const [type, handler, capture] of windowListeners)
+    window.removeEventListener(type, handler, capture);
   session.dispose();
 });
 </script>
-
-<style>
-.drop-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--backdrop);
-  pointer-events: none;
-}
-
-.drop-overlay__card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 24px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  color: var(--ink-strong);
-  background: var(--bg-raised);
-  box-shadow: var(--shadow-lg);
-  font-size: var(--text-body);
-  font-weight: 500;
-}
-</style>

@@ -26,7 +26,8 @@
 | `src-electron/electron-preload.ts` | 强类型 `window.fileAPI` 桥接                                             |
 | `src-electron/fileSystem.ts`       | 音频/字幕配对与编码检测                                                  |
 | `src-electron/recording-store.ts`  | SQLite 录音存储与原子写入                                                |
-| `quasar.config.js`                 | 构建和 Electron 打包配置                                                 |
+| `quasar.config.js`                 | 构建和 electron-builder 打包配置                                         |
+| `.github/workflows/`               | CI 检查与按 tag 自动发布                                                 |
 
 ## 实现边界
 

@@ -9,6 +9,19 @@
 - 三种练习方式（先听后读、听读回听、先读再听）与专注显示。
 - 原声 / 录音 A/B 对比。
 
+## 下载
+
+在 [Releases](https://github.com/edenz223/ecolingo/releases) 下载对应平台的文件：
+
+| 平台                | 文件                                              |
+| ------------------- | ------------------------------------------------- |
+| Windows             | `EcoLingo-<版本>-win-x64.exe`（便携版，双击运行） |
+| macOS Apple Silicon | `EcoLingo-<版本>-mac-arm64.dmg`                   |
+| macOS Intel         | `EcoLingo-<版本>-mac-x64.dmg`                     |
+| Linux               | `EcoLingo-<版本>-linux-x86_64.AppImage`           |
+
+应用尚未代码签名：Windows 首次运行若出现 SmartScreen，点「更多信息 → 仍要运行」；macOS 把应用拖入「应用程序」后，在终端执行 `xattr -cr /Applications/EcoLingo.app` 再打开。
+
 ## 本地录音
 
 完成跟读后，录音写入 Electron 用户数据目录下的 `recordings/`：
@@ -20,15 +33,27 @@
 
 ## 开发
 
-需要 Node 20+ 和 Yarn 1。
+需要 Node 22.12+（见 `.nvmrc`）和 Yarn 1。
 
 ```bash
 yarn            # 安装依赖
 yarn dev        # Electron 开发模式
 yarn lint
+yarn typecheck  # vue-tsc 类型检查
 yarn test       # 单元测试
 yarn test:smoke # Electron 冒烟测试（需图形环境，先 yarn build）
-yarn build      # 打包
+yarn build      # 构建并打包当前平台，输出到 dist/electron/Packaged/
 ```
 
 `tests/fixtures/` 中的样例课程供冒烟测试使用。
+
+## 发布
+
+把 `package.json` 的 `version` 改为新版本并合入 master，然后推送同名 tag：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub Actions 会在 Windows、macOS、Linux 上分别打包，并创建 GitHub Release 附上安装文件。tag 与 `version` 不一致时构建失败；带 `-` 的 tag（如 `v0.2.0-beta.1`）发布为预发布版本。

@@ -1,0 +1,82 @@
+name: Release
+
+# A v* tag builds every platform and publishes a GitHub Release.
+# Pull requests that touch packaging and manual runs only upload the builds as artifacts.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - .nvmrc
+      - package.json
+      - quasar.config.js
+      - src-electron/**
+      - yarn.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check tag matches package.json version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: EcoLingo-${{ runner.os }}
+          path: |
+            dist/electron/Packaged/*.exe
+            dist/electron/Packaged/*.dmg
+            dist/electron/Packaged/*.AppImage
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: package
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Tags such as v0.2.0-beta.1 become pre-releases.
+          prerelease=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "EcoLingo $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag \
+            "${prerelease[@]}"

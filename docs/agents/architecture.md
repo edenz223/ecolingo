@@ -16,6 +16,7 @@
 | `src/utils/settings.ts`            | 偏好设置加载与持久化（`localStorage`）                   |
 | `src/utils/keyboard-shortcuts.ts`  | 单键快捷键分发（空格与 R 另有专用模块）                  |
 | `src/utils/playback-options.ts`    | 循环模式、倍速预设与倍速取整                             |
+| `src/utils/practice-status.ts`     | 由练习方式、Zen 阶段与录音状态推导步骤和说明文字         |
 | `src/utils/voice-activity.ts`      | Web Audio RMS 语音检测与自适应阈值                       |
 | `src/utils/zen-flow.ts`            | Zen 练习流程调度                                         |
 | `src/types/`                       | TypeScript 类型定义                                      |

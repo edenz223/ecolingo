@@ -18,6 +18,7 @@ const detectorScope = loadTsModule(path.join(root, 'src/utils/voice-activity.ts'
 const settingsScope = loadTsModule(path.join(root, 'src/utils/settings.ts'));
 const zenScope = loadTsModule(path.join(root, 'src/utils/zen-flow.ts'));
 const playbackOptionsScope = loadTsModule(path.join(root, 'src/utils/playback-options.ts'));
+const practiceStatusScope = loadTsModule(path.join(root, 'src/utils/practice-status.ts'));
 
 function signal(options) {
   let now = 0;
@@ -139,6 +140,7 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
     ref: require('vue').shallowRef, computed: require('vue').computed, watch: require('vue').watch,
     loadSettings: settingsScope.loadSettings, saveSettings: settingsScope.saveSettings,
     clampPlaybackRate: playbackOptionsScope.clampPlaybackRate,
+    derivePracticeStatus: practiceStatusScope.derivePracticeStatus,
     createVoiceMonitor: () => monitor,
     createZenCompletion: zenScope.createZenCompletion,
     navigator: { mediaDevices: { getUserMedia: () => denied
@@ -307,7 +309,7 @@ test('no speech pauses at current sentence without saving an empty take', async 
   } finally { h.cleanup(); }
 });
 
-test('no-speech icon clears after one second without a popup or resuming playback', async () => {
+test('no-speech notice clears after two seconds without a popup or resuming playback', async () => {
   const h = setup();
   const newer = setup();
   try {
@@ -316,7 +318,7 @@ test('no-speech icon clears after one second without a popup or resuming playbac
     assert.equal(h.recordingError.value, '');
     assert.equal(h.noSpeechSentence.value, h.sentences[0].start);
     newer.recordingError.value = '麦克风已断开';
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await new Promise((resolve) => setTimeout(resolve, 2100));
     assert.equal(h.recordingError.value, '');
     assert.equal(h.sound.playing(), false);
     assert.equal(h.saves.length, 0);
@@ -528,6 +530,29 @@ async function reachZenPreview(h) {
   await Promise.all([...h.pendingSaves]);
   await flush();
 }
+
+test('practice status follows a listen-mode take and its no-speech retry hint', async () => {
+  const h = setup();
+  try {
+    h.player.step();
+    await flush();
+    assert.equal(h.practiceStatus.value.activeStep, 1);
+    assert.equal(h.practiceStatus.value.tone, 'recording');
+    h.emit('no-speech');
+    await flush();
+    assert.equal(h.practiceStatus.value.tone, 'warning');
+    assert.equal(h.practiceStatus.value.message, practiceStatusScope.noSpeechMessage);
+  } finally { h.cleanup(); }
+});
+
+test('practice status reaches the replay step of the attempt flow', async () => {
+  const h = setup();
+  try {
+    await reachZenPreview(h);
+    assert.deepEqual([...h.practiceStatus.value.steps], ['尝试', '听原声', '跟读', '回听']);
+    assert.equal(h.practiceStatus.value.activeStep, 3);
+  } finally { h.cleanup(); }
+});
 
 test('Zen repeats the complete cycle and stops after the final sentence replay', async () => {
   for (const repeat of [true, false]) {

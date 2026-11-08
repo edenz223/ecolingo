@@ -21,6 +21,11 @@
   --active-ink: rgb(0, 122, 204);
   --active-bg: rgba(0, 122, 204, 0.08);
 
+  // Recording coral matches the recording play button; text stays above 4.5:1.
+  --recording-ink: #c43c3c;
+  --recording-bg: rgba(222, 85, 85, 0.1);
+  --warning-ink: #a16207;
+
   --focus-ring: 2px solid rgba(0, 122, 204, 0.4);
   --focus-offset: 2px;
 

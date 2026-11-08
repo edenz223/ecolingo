@@ -6,9 +6,6 @@
       'controls-menu-open': menuOpen,
     }"
   >
-    <div class="sr-only" role="status" aria-live="polite">
-      {{ isRecording ? '正在录音' : '' }}
-    </div>
     <Transition name="focus-recording">
       <q-btn
         v-if="focusMode && isRecording"

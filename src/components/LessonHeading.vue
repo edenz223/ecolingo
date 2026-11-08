@@ -4,6 +4,7 @@
       <div class="ellipsis">{{ lessonName }}</div>
       <span class="lesson-count">第 {{ sentencePosition }} / {{ sentenceCount }} 句</span>
     </div>
+    <slot />
     <q-btn
       v-if="!following && sentenceCount"
       flat

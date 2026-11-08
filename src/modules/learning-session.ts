@@ -4,6 +4,7 @@ import { RecorderManager } from './recorder';
 import { ZenCoordinator } from './zen';
 import { loadSettings, saveSettings } from '../utils/settings';
 import { clampPlaybackRate } from '../utils/playback-options';
+import { derivePracticeStatus } from '../utils/practice-status';
 import type { Lesson, RecordingClip } from '../types/recording';
 import type { Sentence } from '../types/subtitles';
 import type { PracticeMethod } from '../types/settings';
@@ -60,6 +61,21 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     if (recordingError.value)
       return { source: 'recording', title: '录音提示', message: recordingError.value } as const;
     return null;
+  });
+
+  const practiceStatus = computed(() => {
+    // Read the revision so the status follows Howler starting or stopping.
+    void player.playbackRevision.value;
+    return derivePracticeStatus({
+      shadowingMode: shadowingMode.value && Boolean(player.sound.value),
+      practiceMethod: practiceMethod.value,
+      zenPhase: zenPhase.value,
+      isRecording: isRecording.value,
+      isShadowing: player.isShadowing.value,
+      isPlayingReference: !player.isShadowing.value && Boolean(player.sound.value?.playing()),
+      recordingStatus: recorder.recordingStatus.value,
+      noSpeech: recorder.noSpeechSentence.value !== null,
+    });
   });
 
   recorder.setCallbacks({
@@ -409,6 +425,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     isRecording,
     recordingError,
     activeError,
+    practiceStatus,
     recordingRevision: recorder.recordingRevision,
     recordingVoiceActive: recorder.recordingVoiceActive,
     recordingStatus: recorder.recordingStatus,

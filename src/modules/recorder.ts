@@ -342,9 +342,10 @@ export class RecorderManager {
         this.callbacks.seekSentence?.(cur.start);
         this.noSpeechSentence.value = cur.start;
       }
+      // Long enough to read the retry hint before it clears.
       this.noSpeechNoticeTimer = setTimeout(() => {
         this.clearNoSpeechNotice();
-      }, 1000);
+      }, 2000);
       return;
     }
     const cur = context?.sentence || this.callbacks.getCurrentSentence?.();

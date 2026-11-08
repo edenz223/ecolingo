@@ -1,5 +1,6 @@
 <template>
   <div class="zen-stage">
+    <div v-if="$slots.status" class="zen-status"><slot name="status" /></div>
     <div class="zen-neighbor" aria-hidden="true">{{ previous }}</div>
     <Transition name="zen-sentence" mode="out-in">
       <div :key="sentenceKey" class="zen-current">{{ current }}</div>
@@ -20,6 +21,7 @@ defineProps<{
 
 <style>
 .zen-stage {
+  position: relative;
   width: 100%;
   height: 100%;
   max-width: 100%;
@@ -37,6 +39,13 @@ defineProps<{
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+.zen-status {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
 }
 .zen-current {
   font-family: var(--font-display);

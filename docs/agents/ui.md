@@ -60,6 +60,14 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 | `--active-ink` | `rgb(0, 122, 204)`        |
 | `--active-bg`  | `rgba(0, 122, 204, 0.08)` |
 
+### 录音与提示文字
+
+| 令牌              | 值                       | 用途                                   |
+| ----------------- | ------------------------ | -------------------------------------- |
+| `--recording-ink` | `#c43c3c`                | 录音中的当前步骤文字（白底对比 ≥ 4.5） |
+| `--recording-bg`  | `rgba(222, 85, 85, 0.1)` | 录音中的当前步骤底色                   |
+| `--warning-ink`   | `#a16207`                | 「没听到声音」等警示文字               |
+
 ### 焦点
 
 | 令牌             | 值                                 |
@@ -228,6 +236,20 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 
 ---
 
+## 练习状态
+
+开启跟读且已加载课程时显示练习状态（`src/components/PracticeStatus.vue`，状态由 `src/utils/practice-status.ts` 推导）：
+
+- 步骤随练习方式变化：先听后读「听原声 · 跟读」；听读回听「听原声 · 跟读 · 回听」；先读再听「尝试 · 听原声 · 跟读 · 回听」。当前步骤用 `--active-ink` / `--active-bg` 胶囊高亮，录音中改用 `--recording-ink` / `--recording-bg`；已完成步骤 `--ink-muted`，未到步骤 `--ink-faint`；等待开始时不高亮任何步骤。
+- 步骤后显示一行说明文字（`--text-caption`，超长省略）：录音器状态（「请开始跟读…」「等待说完：静音 1.2 秒后结束」「已达到 10 秒录音上限，正在保存…」等），Zen 保存与回听阶段显示「正在保存录音…」「正在回听你的录音」。
+- 没检测到语音时不高亮步骤，改为 `--warning-ink` 显示「没听到声音，按空格重试」，持续 2 秒。
+- 普通模式放在课程标题栏（句子计数右侧）；专注模式固定在舞台顶部居中，不挤占句子布局。窗口 ≤ 600 px 时只显示当前步骤。
+- 布局里有一个常驻的 `sr-only` 礼貌播报区，读出「当前步骤：说明」，没有状态但在录音时读「正在录音」。
+
+## 按键提示
+
+键盘触发 C / X / Z、Q / E、S 时，在窗口底部中央（`bottom: 96px`，高于底栏和专注模式的录音按钮）显示约 1.2 秒的胶囊提示（`src/components/ActionHud.vue`）：「速度 1.1x」「第 3 课 · 课程名」「跟读已开启 · 先听后读」「跟读已关闭」。鼠标操作不显示（控件本身可见）。胶囊 `--bg-raised`、1 px `--border-strong`、`--radius-full`、`--shadow-md`，150 ms 淡入淡出，减少动态效果时无过渡；提示容器本身是礼貌播报区。
+
 ## 字幕列表
 
 - 每个句子条目：`--text-sentence`（18 px），行高 1.7，内边距 `10px 14px`，圆角 `--radius-md`（6 px）。
@@ -303,6 +325,8 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 | `src/components/RecordingWaveform.vue` | 录音胶囊声波                                         |
 | `src/components/ShortcutsDialog.vue`   | 快捷键对话框                                         |
 | `src/components/AppErrorDialog.vue`    | 课程 / 录音错误对话框                                |
+| `src/components/PracticeStatus.vue`    | 练习步骤与状态说明                                   |
+| `src/components/ActionHud.vue`         | 键盘操作的短暂提示                                   |
 | `src-electron/electron-main.ts`        | `titleBarOverlay` 颜色、关闭 Mica、背景色            |
 | `src/pages/ErrorNotFound.vue`          | 错误页面板样式对齐新系统                             |
 | `src/components/LoopModeList.vue`      | 循环模式菜单与单句循环次数步进器                     |

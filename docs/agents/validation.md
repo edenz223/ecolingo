@@ -15,6 +15,7 @@
 | VAD 核心逻辑                    | `node --test tests/voice-activity.test.cjs`     |
 | 偏好设置逻辑                    | `node --test tests/settings.test.cjs`           |
 | 键盘快捷键分发                  | `node --test tests/keyboard-shortcuts.test.cjs` |
+| 练习状态推导                    | `node --test tests/practice-status.test.cjs`    |
 | 学习会话协调（跟读、Zen、回放） | `node --test tests/voice-activity.test.cjs`     |
 | 录音存储逻辑                    | `npm run test:recordings`                       |
 | 其他已有测试覆盖的核心逻辑      | 运行对应测试文件                                |

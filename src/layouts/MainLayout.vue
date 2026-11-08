@@ -14,8 +14,13 @@
         :drawer-open="drawerOpen"
         @resume-following="session.resumeFollowing"
         @toggle-drawer="drawerOpen = !drawerOpen"
-      />
+      >
+        <PracticeStatus :status="practiceStatus" />
+      </LessonHeading>
     </q-header>
+
+    <div class="sr-only" role="status" aria-live="polite">{{ practiceAnnouncement }}</div>
+    <ActionHud :message="hudMessage" />
 
     <ShortcutsDialog v-model="showShortcuts" />
 
@@ -54,7 +59,9 @@
           :current="player.currentSentence.value?.text || ''"
           :next="session.zenNeighbor(1)"
           :sentence-key="player.currentSentence.value?.start"
-        />
+        >
+          <template #status><PracticeStatus :status="practiceStatus" /></template>
+        </ZenStage>
         <SentenceList
           v-else
           :sentences="player.parsedSentences.value"
@@ -100,19 +107,24 @@
   </q-layout>
 </template>
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import ActionHud from '../components/ActionHud.vue';
 import AppErrorDialog from '../components/AppErrorDialog.vue';
 import AppTitleBar from '../components/AppTitleBar.vue';
 import LessonDrawer from '../components/LessonDrawer.vue';
 import LessonHeading from '../components/LessonHeading.vue';
 import PlaybackBar from '../components/PlaybackBar.vue';
+import PracticeStatus from '../components/PracticeStatus.vue';
 import SentenceList from '../components/SentenceList.vue';
 import ShortcutsDialog from '../components/ShortcutsDialog.vue';
 import ZenStage from '../components/ZenStage.vue';
 import { createLearningSession } from '../modules/learning-session';
+import { practiceMethods } from '../modules/zen';
 import { createKeyboardShortcuts } from '../utils/keyboard-shortcuts';
 import { createPlaybackShortcut } from '../utils/playback-shortcut';
 import { createRecordingRestartShortcut } from '../utils/recording-shortcut';
+import { formatPlaybackRate } from '../utils/playback-options';
+import { describePracticeStatus } from '../utils/practice-status';
 import type { Sentence } from '../types/subtitles';
 
 const isWindows = window.fileAPI?.platform === 'win32';
@@ -135,6 +147,7 @@ const {
   practiceMethod,
   isRecording,
   activeError,
+  practiceStatus,
   recordingRevision,
   recordingVoiceActive,
   recordings,
@@ -148,6 +161,38 @@ function scrollToSentence(sentence: Sentence) {
     behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     block: 'center',
   });
+}
+
+const practiceAnnouncement = computed(
+  () => describePracticeStatus(practiceStatus.value) || (isRecording.value ? '正在录音' : '')
+);
+
+// Brief confirmation for keyboard commands whose control may be hidden (focus mode).
+const hudMessage = ref('');
+let hudTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showHud(message: string) {
+  hudMessage.value = message;
+  if (hudTimer) clearTimeout(hudTimer);
+  hudTimer = setTimeout(() => {
+    hudMessage.value = '';
+    hudTimer = null;
+  }, 1200);
+}
+
+function showRateHud() {
+  showHud(`速度 ${formatPlaybackRate(currentPlaybackRate.value)}x`);
+}
+
+function showLessonHud() {
+  const lesson = lessons.value[currentLessonIndex.value];
+  if (lesson) showHud(`第 ${currentLessonIndex.value + 1} 课 · ${lesson.name}`);
+}
+
+function toggleShadowingFromKeyboard() {
+  session.toggleShadowingMode();
+  const method = practiceMethods.find(item => item.id === practiceMethod.value);
+  showHud(shadowingMode.value ? `跟读已开启 · ${method?.label}` : '跟读已关闭');
 }
 
 watch(focusMode, val => {
@@ -181,13 +226,25 @@ const keyboardShortcut = createKeyboardShortcuts({
   isBlocked: () => Boolean(activeError.value),
   hasLesson: () => Boolean(player.sound.value),
   pauseFollowing: session.pauseFollowing,
-  toggleShadowing: session.toggleShadowingMode,
+  toggleShadowing: toggleShadowingFromKeyboard,
   previousSentence: session.beforeSentence,
   nextSentence: session.nextSentence,
-  previousLesson: session.prev,
-  nextLesson: session.next,
-  adjustPlaybackRate: delta => session.setPlaybackRate(currentPlaybackRate.value + delta),
-  resetPlaybackRate: () => session.setPlaybackRate(1),
+  previousLesson: () => {
+    session.prev();
+    showLessonHud();
+  },
+  nextLesson: () => {
+    session.next();
+    showLessonHud();
+  },
+  adjustPlaybackRate: delta => {
+    session.setPlaybackRate(currentPlaybackRate.value + delta);
+    showRateHud();
+  },
+  resetPlaybackRate: () => {
+    session.setPlaybackRate(1);
+    showRateHud();
+  },
   reload: () => location.reload(),
 });
 
@@ -230,6 +287,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (hudTimer) clearTimeout(hudTimer);
   if (focusMode.value) {
     window.fileAPI?.setFocusMode?.(false);
   }

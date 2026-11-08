@@ -18,7 +18,7 @@
       >
         <RecordingWaveform
           :key="recordingRevision"
-          :voice-active="recordingVoiceActive"
+          :level="recordingLevel"
           :restarted="recordingRevision > 0"
         />
         <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
@@ -56,7 +56,7 @@
           <RecordingWaveform
             v-if="isRecording"
             :key="recordingRevision"
-            :voice-active="recordingVoiceActive"
+            :level="recordingLevel"
             :restarted="recordingRevision > 0"
           />
           <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
@@ -79,31 +79,31 @@
       </div>
 
       <div class="practice-controls">
-        <button
-          type="button"
-          class="ios-switch-control"
+        <q-btn
+          flat
+          round
+          icon="record_voice_over"
+          class="shadowing-toggle"
+          :class="{ 'shadowing-toggle--on': shadowingMode }"
           role="switch"
           aria-label="跟读"
-          :aria-checked="shadowingMode"
-          :disabled="!hasLesson"
+          :aria-checked="shadowingMode ? 'true' : 'false'"
+          :disable="!hasLesson"
           @click="emit('toggle-shadowing')"
         >
-          <span class="ios-switch" aria-hidden="true"><span class="ios-switch__thumb" /></span>
           <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
             >{{ shadowingMode ? '关闭跟读' : '开启跟读' }} · S</q-tooltip
           >
-        </button>
-        <span v-if="!shadowingMode" class="practice-label">跟读</span>
+        </q-btn>
         <q-btn
           v-if="shadowingMode"
           flat
           dense
-          no-caps
-          label="跟读"
-          icon-right="expand_less"
+          round
+          icon="expand_less"
           class="practice-method-btn"
           :disable="!hasLesson"
-          aria-label="跟读：选择练习方式"
+          aria-label="选择练习方式"
           aria-haspopup="menu"
           :aria-expanded="practiceMenuVisible"
         >
@@ -251,7 +251,8 @@ const props = defineProps<{
   isPlaying: boolean;
   isRecording: boolean;
   recordingRevision: number;
-  recordingVoiceActive: boolean;
+  // Smoothed microphone loudness, 0 to 1.
+  recordingLevel: number;
   shadowingMode: boolean;
   practiceMethod: PracticeMethod;
   loopMode: LoopMode;
@@ -412,17 +413,22 @@ defineExpose({ closeMenus });
   }
 }
 
-.practice-label {
-  padding: 0 4px;
+.shadowing-toggle {
   color: var(--ink);
-  font-size: var(--text-control);
-  font-weight: 500;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.shadowing-toggle--on {
+  color: var(--active-ink);
+  background: var(--active-bg);
 }
 
 .practice-method-btn {
+  width: 28px;
   height: 28px;
+  min-width: 28px;
   min-height: 28px;
-  color: var(--ink);
+  color: var(--ink-muted);
   transition: color 120ms ease, background-color 120ms ease;
 }
 
@@ -433,8 +439,6 @@ defineExpose({ closeMenus });
 
 .practice-method-btn .q-icon {
   font-size: 20px;
-  margin-left: 2px;
-  color: var(--ink-muted);
 }
 
 .playback-rate-control {
@@ -483,60 +487,6 @@ defineExpose({ closeMenus });
 .practice-menu .q-item__label:not(.q-item__label--caption) {
   font-size: var(--text-body);
   font-weight: 500;
-}
-
-.ios-switch-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 4px 6px;
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-md);
-}
-
-.ios-switch-control:hover {
-  background: var(--bg-hover);
-}
-
-.ios-switch-control:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-.ios-switch {
-  position: relative;
-  width: 38px;
-  height: 22px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-full);
-  transition: background-color 150ms ease;
-}
-
-.ios-switch__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: #ffffff;
-  border-radius: 50%;
-  box-shadow: var(--shadow-sm);
-  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.ios-switch-control[aria-checked='true'] .ios-switch {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.ios-switch-control[aria-checked='true'] .ios-switch__thumb {
-  transform: translateX(16px);
 }
 
 @media (max-width: 600px) {

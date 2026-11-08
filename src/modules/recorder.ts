@@ -31,7 +31,7 @@ export interface RecorderCallbacks {
 
 export class RecorderManager {
   isRecording: Ref<boolean>;
-  recordingVoiceActive: Ref<boolean>;
+  recordingLevel: Ref<number>;
   recordingStatus: Ref<string>;
   recordingError: Ref<string>;
   recordings: Ref<Record<number, RecordingClip>>;
@@ -63,7 +63,7 @@ export class RecorderManager {
 
   constructor(callbacks: RecorderCallbacks = {}) {
     this.isRecording = ref(false);
-    this.recordingVoiceActive = ref(false);
+    this.recordingLevel = ref(0);
     this.recordingStatus = ref('');
     this.recordingError = ref('');
     this.recordings = ref({});
@@ -247,9 +247,9 @@ export class RecorderManager {
         this.recordingStartedAt = performance.now();
         this.recordingError.value = '';
         this.voiceMonitor.start(
-          ({ state, reason, voiceActive }: any) => {
+          ({ state, reason, level }: any) => {
             if (attempt !== this.recordingAttempt) return;
-            this.recordingVoiceActive.value = Boolean(voiceActive);
+            this.recordingLevel.value = level || 0;
             const statusMap: Record<string, string> = {
               waiting: '请开始跟读…',
               speaking: '正在录音…',
@@ -365,7 +365,7 @@ export class RecorderManager {
     this.isPreparingRecording.value = false;
     this.restartCue?.cancel();
     this.restartCue = null;
-    this.recordingVoiceActive.value = false;
+    this.recordingLevel.value = 0;
     this.recordingAttempt++;
     this.voiceMonitor?.stop();
 
@@ -490,7 +490,7 @@ export class RecorderManager {
 
   resetRecordingState() {
     this.activeRecordingRequest = null;
-    this.recordingVoiceActive.value = false;
+    this.recordingLevel.value = 0;
     this.recordingStatus.value = '';
     this.isRecording.value = false;
     this.pendingRecordingSentence = null;

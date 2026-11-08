@@ -12,6 +12,8 @@ export type VADState = 'waiting' | 'speaking' | 'silence';
 export interface VADResult {
   reason: VADReason;
   voiceActive: boolean;
+  // Smoothed loudness for the waveform, 0 (silent) to 1 (loud speech).
+  level: number;
   state: VADState;
 }
 

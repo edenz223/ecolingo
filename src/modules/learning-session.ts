@@ -49,6 +49,11 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     repeatCount: ref(settings.repeatCount),
   });
 
+  // Another lesson is loading while the previous one's sentences stay on screen.
+  const lessonSwitching = computed(
+    () => lessonLoading.value && player.parsedSentences.value.length > 0
+  );
+
   const recorder = new RecorderManager();
 
   const zen = new ZenCoordinator(
@@ -88,7 +93,6 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       isRecording: isRecording.value,
       isShadowing: player.isShadowing.value,
       isPlayingReference: !player.isShadowing.value && Boolean(player.sound.value?.playing()),
-      recordingStatus: recorder.recordingStatus.value,
       noSpeech: recorder.noSpeechSentence.value !== null,
     });
   });
@@ -238,6 +242,13 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     resumePoint.value = { lessonKey: key, sentenceStart: sentence.start, sentenceIndex };
   });
 
+  // Open the microphone while the original plays, so recording can begin right
+  // after the sentence instead of waiting for the device and audio graph to start.
+  watch(player.playbackRevision, () => {
+    if (shadowingMode.value && !compare.isActive() && player.sound.value?.playing())
+      void recorder.ensureRecorderAccess();
+  });
+
   // Keep the open lesson's count live as takes are saved.
   watch(recorder.recordings, recordings => {
     if (recordingsLessonKey) setRecordedCount(recordingsLessonKey, Object.keys(recordings).length);
@@ -337,6 +348,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   }
 
   function togglePlay() {
+    if (!player.sound.value) return;
     if (compare.isActive()) {
       stopCompare();
       return;
@@ -532,6 +544,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     currentLessonIndex,
     followSentence,
     lessonLoading,
+    lessonSwitching,
     shadowingMode,
     focusMode,
     theme,
@@ -550,7 +563,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     comparePhase: compare.phase,
     compareSentenceStart: compare.sentenceStart,
     recordingRevision: recorder.recordingRevision,
-    recordingVoiceActive: recorder.recordingVoiceActive,
+    recordingLevel: recorder.recordingLevel,
     recordingStatus: recorder.recordingStatus,
     recordings: recorder.recordings,
     noSpeechSentence: recorder.noSpeechSentence,

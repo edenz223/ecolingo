@@ -40,6 +40,19 @@ test('waits for speech, keeps long speech and breathing pauses, then ends on sil
   assert.equal(feed(0.001, 20).reason, 'silence');
 });
 
+test('waveform level follows loudness instead of pinning at the top', () => {
+  const feed = signal();
+  assert.equal(feed(0.001, 400).level, 0);
+  const quiet = feed(0.012, 200).level;
+  const normal = feed(0.04, 200).level;
+  const loud = feed(0.32, 200).level;
+  assert.ok(quiet > 0 && quiet < 0.4, `quiet ${quiet}`);
+  assert.ok(normal > quiet && normal < 0.8, `normal ${normal}`);
+  assert.ok(loud > 0.99, `loud ${loud}`);
+  assert.ok(feed(0.001, 20).level < 1, 'starts falling on the next quiet frame');
+  assert.equal(feed(0.001, 300).level, 0);
+});
+
 test('immediate speech is not calibrated away and quiet speech can finish', () => {
   const feed = signal();
   assert.equal(feed(0.012, 600).state, 'speaking');
@@ -740,6 +753,26 @@ test('changing first attempt cancels an active take and applies on next start', 
     h.player.togglePlay();
     await flush();
     assert.equal(h.zenPhase.value, 'first');
+  } finally { h.cleanup(); }
+});
+
+test('the microphone opens while the original plays, only with shadowing on', async () => {
+  const h = setup();
+  try {
+    h.shadowingMode.value = false;
+    h.player.playbackRevision.value++;
+    await flush();
+    assert.equal(h.recorder.mediaRecorder, null);
+    h.shadowingMode.value = true;
+    h.sound.active = false;
+    h.player.playbackRevision.value++;
+    await flush();
+    assert.equal(h.recorder.mediaRecorder, null);
+    h.sound.active = true;
+    h.player.playbackRevision.value++;
+    await flush();
+    assert.ok(h.recorder.mediaRecorder);
+    assert.equal(h.isRecording.value, false);
   } finally { h.cleanup(); }
 });
 

@@ -8,23 +8,22 @@
       color="primary"
       :icon="resume || lessonCount ? 'play_arrow' : 'folder_open'"
       :label="resume ? '继续练习' : lessonCount ? '从第一课开始' : '打开课程文件夹'"
-      :loading="loading"
+      :loading="showLoading"
       @click="primaryAction"
     />
     <q-btn
-      v-if="lessonCount && !loading"
+      v-if="lessonCount && !showLoading"
       flat
       no-caps
       label="打开其他文件夹"
       class="lesson-empty__secondary"
       @click="emit('open-folder')"
     />
-    <div class="lesson-empty__hint">也可以把课程文件夹拖到窗口里</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps<{
   loading: boolean;
@@ -38,8 +37,35 @@ const emit = defineEmits<{
   (event: 'open-folder'): void;
 }>();
 
+// Most lessons open within a few hundred milliseconds; only show the
+// spinner for slower loads so it does not flash.
+const loadingDelay = 300;
+const showLoading = ref(false);
+let loadingTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(
+  () => props.loading,
+  loading => {
+    if (loadingTimer) clearTimeout(loadingTimer);
+    loadingTimer = null;
+    if (!loading) {
+      showLoading.value = false;
+      return;
+    }
+    loadingTimer = setTimeout(() => {
+      showLoading.value = true;
+      loadingTimer = null;
+    }, loadingDelay);
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  if (loadingTimer) clearTimeout(loadingTimer);
+});
+
 const title = computed(() => {
-  if (props.loading) return '正在打开课程…';
+  if (showLoading.value) return '正在打开课程…';
   if (props.resume) return '继续上次的练习';
   return props.lessonCount ? '选择一课开始' : '开始今天的跟读';
 });
@@ -47,7 +73,7 @@ const title = computed(() => {
 const detail = computed(() => {
   if (props.resume) return `${props.resume.lessonName} · 第 ${props.resume.sentenceNumber} 句`;
   if (props.lessonCount) return `${props.folderName} · 共 ${props.lessonCount} 课`;
-  return '选择包含音频和字幕的文件夹';
+  return '选择或拖入包含音频和字幕的文件夹';
 });
 
 function primaryAction() {
@@ -101,10 +127,5 @@ function primaryAction() {
 .lesson-empty .lesson-empty__secondary {
   margin-top: -4px;
   color: var(--ink-muted);
-}
-
-.lesson-empty__hint {
-  color: var(--ink-muted);
-  font-size: var(--text-caption);
 }
 </style>

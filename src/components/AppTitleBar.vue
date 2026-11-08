@@ -1,7 +1,9 @@
 <template>
   <div class="system-titlebar" @dblclick="toggleMaximize">
     <div class="titlebar-leading">
-      <span class="app-brand">EcoLingo</span>
+      <span class="app-brand"
+        ><img class="app-brand__icon" src="icons/favicon-32x32.png" alt="" />EcoLingo</span
+      >
       <button
         type="button"
         class="titlebar-menu-btn"

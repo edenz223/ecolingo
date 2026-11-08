@@ -1,21 +1,33 @@
 <template>
   <div class="zen-stage">
-    <div v-if="$slots.status" class="zen-status"><slot name="status" /></div>
     <div class="zen-neighbor" aria-hidden="true">{{ previous }}</div>
-    <Transition name="zen-sentence" mode="out-in">
-      <div :key="sentenceKey" class="zen-current">{{ current }}</div>
-    </Transition>
+    <div class="zen-focus">
+      <Transition name="zen-sentence" mode="out-in">
+        <div :key="sentenceKey" class="zen-current">{{ current }}</div>
+      </Transition>
+      <!-- Right under the sentence; the space stays reserved so the sentence never moves. -->
+      <div
+        class="zen-status"
+        :class="{ 'zen-status--idle': !status?.visible || status.tone === 'idle' }"
+      >
+        <PracticeStatusLine v-if="status?.visible" :status="status" />
+      </div>
+    </div>
     <div class="zen-neighbor" aria-hidden="true">{{ next }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
+import PracticeStatusLine from './PracticeStatus.vue';
+import type { PracticeStatus } from '../utils/practice-status';
+
 defineProps<{
   previous: string;
   current: string;
   next: string;
   // Changing the key replays the cross-fade between sentences.
   sentenceKey: number | undefined;
+  status?: PracticeStatus;
 }>();
 </script>
 
@@ -40,12 +52,20 @@ defineProps<{
   background: transparent;
   box-shadow: none;
 }
+.zen-focus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
 .zen-status {
-  position: absolute;
-  top: 24px;
-  left: 50%;
-  max-width: calc(100% - 32px);
-  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  min-height: 22px;
+  max-width: calc(100vw - 32px);
+}
+.zen-status--idle {
+  visibility: hidden;
 }
 .zen-current {
   font-family: var(--font-display);

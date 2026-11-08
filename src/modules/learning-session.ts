@@ -49,6 +49,11 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     repeatCount: ref(settings.repeatCount),
   });
 
+  // Another lesson is loading while the previous one's sentences stay on screen.
+  const lessonSwitching = computed(
+    () => lessonLoading.value && player.parsedSentences.value.length > 0
+  );
+
   const recorder = new RecorderManager();
 
   const zen = new ZenCoordinator(
@@ -337,6 +342,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   }
 
   function togglePlay() {
+    if (!player.sound.value) return;
     if (compare.isActive()) {
       stopCompare();
       return;
@@ -532,6 +538,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     currentLessonIndex,
     followSentence,
     lessonLoading,
+    lessonSwitching,
     shadowingMode,
     focusMode,
     theme,

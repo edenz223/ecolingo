@@ -75,7 +75,9 @@ export class Player {
 
   // startAt opens the lesson at the sentence beginning at that time (first sentence otherwise).
   async playLesson(lesson: Lesson, onReady?: () => void, startAt?: number) {
-    this.releaseLesson();
+    // The previous sentences stay on screen until the new lesson is ready, so
+    // switching lessons does not flash the empty state.
+    this.releaseLesson(true);
     this.callbacks.onLoadingChange?.(true);
     const sessionId = this.loadSessionId;
     this.currentLesson = lesson;
@@ -100,6 +102,7 @@ export class Player {
       this.initializeSound(audioFilePath, sentences, sessionId, onReady, startAt);
     } catch (error: any) {
       if (sessionId === this.loadSessionId) {
+        this.clearSentences();
         this.callbacks.onLoadingChange?.(false);
         console.error('Error:', error);
         this.callbacks.onError?.(error.message || String(error));
@@ -107,7 +110,7 @@ export class Player {
     }
   }
 
-  releaseLesson() {
+  releaseLesson(keepSentences = false) {
     this.callbacks.onLoadingChange?.(false);
     this.callbacks.onReleaseLesson?.();
     this.loadSessionId++;
@@ -121,9 +124,13 @@ export class Player {
     this.sound.value?.unload();
     this.sound.value = null;
     this.currentLesson = null;
+    this.isScrolling.value = false;
+    if (!keepSentences) this.clearSentences();
+  }
+
+  clearSentences() {
     this.currentSentence.value = null;
     this.parsedSentences.value = [];
-    this.isScrolling.value = false;
   }
 
   initializeSound(
@@ -156,6 +163,7 @@ export class Player {
       },
       onloaderror: (id: unknown, error: unknown) => {
         if (sessionId !== this.loadSessionId) return;
+        this.clearSentences();
         this.callbacks.onLoadingChange?.(false);
         this.callbacks.onError?.('课程音频无法打开，请检查文件是否存在且可以播放。');
         this.pendingSound = null;

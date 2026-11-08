@@ -19,12 +19,11 @@
         :sentence-position="Math.max(1, session.currentSentenceIndex() + 1)"
         :sentence-count="player.parsedSentences.value.length"
         :following="followSentence"
+        :switching="lessonSwitching"
         :drawer-open="drawerOpen"
         @resume-following="session.resumeFollowing"
         @toggle-drawer="drawerOpen = !drawerOpen"
-      >
-        <PracticeStatus :status="practiceStatus" />
-      </LessonHeading>
+      />
     </q-header>
 
     <ActionHud :message="hudMessage" />
@@ -76,9 +75,8 @@
           :current="player.currentSentence.value?.text || ''"
           :next="session.zenNeighbor(1)"
           :sentence-key="player.currentSentence.value?.start"
-        >
-          <template #status><PracticeStatus :status="practiceStatus" /></template>
-        </ZenStage>
+          :status="practiceStatus"
+        />
         <SentenceList
           v-else
           :sentences="player.parsedSentences.value"
@@ -88,6 +86,8 @@
           :is-recording="isRecording"
           :no-speech-sentence="noSpeechSentence"
           :compare-sentence-start="compareSentenceStart"
+          :switching="lessonSwitching"
+          :status="practiceStatus"
           @sentence-click="(sentence, event) => player.handleSentenceClick(sentence, event)"
           @sentence-dblclick="sentence => player.doubleClickSentence(sentence)"
           @play-recording="session.playUserRecording"
@@ -100,7 +100,7 @@
     <PlaybackBar
       ref="playbackBar"
       :focus-mode="focusMode"
-      :has-lesson="Boolean(player.sound.value)"
+      :has-lesson="Boolean(player.sound.value) || lessonSwitching"
       :has-sentence="Boolean(player.currentSentence.value)"
       :is-playing="session.isPlaybackActive()"
       :is-recording="isRecording"
@@ -134,7 +134,6 @@ import LessonDrawer from '../components/LessonDrawer.vue';
 import LessonEmptyState from '../components/LessonEmptyState.vue';
 import LessonHeading from '../components/LessonHeading.vue';
 import PlaybackBar from '../components/PlaybackBar.vue';
-import PracticeStatus from '../components/PracticeStatus.vue';
 import SentenceList from '../components/SentenceList.vue';
 import ShortcutsDialog from '../components/ShortcutsDialog.vue';
 import ZenStage from '../components/ZenStage.vue';
@@ -162,6 +161,7 @@ const {
   currentLessonIndex,
   followSentence,
   lessonLoading,
+  lessonSwitching,
   shadowingMode,
   focusMode,
   theme,

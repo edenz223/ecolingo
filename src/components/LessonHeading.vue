@@ -2,19 +2,26 @@
   <div class="lesson-heading">
     <div v-if="sentenceCount" class="lesson-progress">
       <div class="ellipsis">{{ lessonName }}</div>
-      <span class="lesson-count">第 {{ sentencePosition }} / {{ sentenceCount }} 句</span>
+      <span v-if="!switching" class="lesson-count"
+        >{{ sentencePosition }} / {{ sentenceCount }}</span
+      >
     </div>
-    <slot />
     <q-btn
       v-if="!following && sentenceCount"
       flat
+      round
       dense
+      size="sm"
       color="primary"
       icon="my_location"
-      label="回到当前句"
+      aria-label="回到当前句"
       class="follow-btn"
       @click="emit('resume-following')"
-    />
+    >
+      <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
+        >回到当前句</q-tooltip
+      >
+    </q-btn>
     <q-btn
       flat
       round
@@ -58,6 +65,8 @@ defineProps<{
   sentencePosition: number;
   sentenceCount: number;
   following: boolean;
+  // The next lesson is loading, so the sentence count is stale.
+  switching?: boolean;
   drawerOpen: boolean;
 }>();
 const emit = defineEmits<{

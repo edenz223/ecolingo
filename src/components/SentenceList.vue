@@ -3,6 +3,7 @@
     id="sentences"
     ref="panel"
     class="q-pa-md sentences-panel"
+    :class="{ 'sentences-panel--switching': switching }"
     @wheel.passive="emit('browse')"
     @touchmove.passive="emit('browse')"
     @keydown="moveFocus"
@@ -16,6 +17,7 @@
         active-class="sentence-item--active"
         :class="{
           'sentence-preview': previewClipId && recordings[s.start]?.id === previewClipId,
+          [`sentence-item--${status?.tone}`]: currentSentence === s && status?.visible,
         }"
         @click="emit('sentence-click', s, $event)"
         @dblclick="emit('sentence-dblclick', s)"
@@ -23,6 +25,15 @@
       >
         <q-item-section>
           <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
+          <!-- Status sits under the sentence being read so the eyes never leave it.
+               The line stays reserved while idle so starting or pausing does not shift the list. -->
+          <div
+            v-if="currentSentence === s && status?.visible"
+            class="sentence-status"
+            :class="{ 'sentence-status--idle': status.tone === 'idle' }"
+          >
+            <PracticeStatusLine :status="status" />
+          </div>
         </q-item-section>
         <q-item-section
           v-if="recordings[s.start] && !isRecording && noSpeechSentence !== s.start"
@@ -77,6 +88,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import PracticeStatusLine from './PracticeStatus.vue';
+import type { PracticeStatus } from '../utils/practice-status';
 import type { RecordingClip } from '../types/recording';
 import type { Sentence } from '../types/subtitles';
 
@@ -89,6 +102,9 @@ defineProps<{
   noSpeechSentence: number | null;
   // Sentence whose original/take comparison is running, if any.
   compareSentenceStart: number | null;
+  // The next lesson is loading; this list is about to be replaced.
+  switching?: boolean;
+  status?: PracticeStatus;
 }>();
 const emit = defineEmits<{
   (event: 'sentence-click', sentence: Sentence, domEvent: MouseEvent): void;
@@ -141,6 +157,23 @@ function moveFocus(event: KeyboardEvent) {
   -ms-overflow-style: none;
 }
 
+/* Fade only if loading takes noticeable time, so quick switches stay still. */
+.sentences-panel--switching {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 150ms ease 150ms;
+}
+
+.sentences-panel--switching .sentence-actions > * {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sentences-panel--switching {
+    transition: none;
+  }
+}
+
 .sentences-panel::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -173,6 +206,23 @@ function moveFocus(event: KeyboardEvent) {
   background: var(--active-bg);
   font-weight: 600;
   box-shadow: inset 2px 0 var(--accent);
+}
+
+.sentence-item.sentence-item--active.sentence-item--recording {
+  box-shadow: inset 2px 0 var(--recording-ink);
+}
+
+.sentence-item.sentence-item--active.sentence-item--warning {
+  box-shadow: inset 2px 0 var(--warning-ink);
+}
+
+.sentence-status {
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+.sentence-status--idle {
+  visibility: hidden;
 }
 
 .sentence-item:focus-visible {

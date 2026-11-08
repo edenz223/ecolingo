@@ -143,6 +143,71 @@ test('switching releases active audio and stale animation callbacks', async () =
   assert.equal(player.sound.value, sounds[1]);
 });
 
+test('switching keeps the previous sentences until the next lesson is ready', async () => {
+  const { player, sounds, lesson, resolve } = setup();
+  const a = player.playLesson(lesson('A'));
+  resolve('A');
+  await a;
+  sounds[0].options.onload();
+  const previous = player.currentSentence.value;
+  const b = player.playLesson(lesson('B'));
+  assert.equal(player.sound.value, null);
+  assert.equal(player.parsedSentences.value[0].text, 'A');
+  assert.equal(player.currentSentence.value, previous);
+  resolve('B');
+  await b;
+  assert.equal(player.parsedSentences.value[0].text, 'A');
+  sounds[1].options.onload();
+  assert.equal(player.parsedSentences.value[0].text, 'B');
+  assert.equal(player.currentSentence.value.text, 'B');
+});
+
+test('a failed switch clears the previous sentences', async () => {
+  const { player, sounds, lesson, resolve } = setup();
+  const errors = [];
+  player.setCallbacks({ onError: message => errors.push(message) });
+  const a = player.playLesson(lesson('A'));
+  resolve('A');
+  await a;
+  sounds[0].options.onload();
+  const b = player.playLesson(lesson('B'));
+  resolve('B');
+  await b;
+  sounds[1].options.onloaderror(1, 'missing');
+  assert.equal(errors.length, 1);
+  assert.equal(player.parsedSentences.value.length, 0);
+  assert.equal(player.currentSentence.value, null);
+});
+
+test('rapid switches keep the old list and finish on the last lesson', async () => {
+  const { player, sounds, lesson, resolve } = setup();
+  const a = player.playLesson(lesson('A'));
+  resolve('A');
+  await a;
+  sounds[0].options.onload();
+  const b = player.playLesson(lesson('B'));
+  const c = player.playLesson(lesson('C'));
+  resolve('B');
+  await b;
+  assert.equal(player.parsedSentences.value[0].text, 'A');
+  resolve('C');
+  await c;
+  sounds[sounds.length - 1].options.onload();
+  assert.equal(player.currentLesson.name, 'C');
+  assert.equal(player.parsedSentences.value[0].text, 'C');
+});
+
+test('teardown clears the sentences', async () => {
+  const { player, sounds, lesson, resolve } = setup();
+  const a = player.playLesson(lesson('A'));
+  resolve('A');
+  await a;
+  sounds[0].options.onload();
+  player.releaseLesson();
+  assert.equal(player.parsedSentences.value.length, 0);
+  assert.equal(player.currentSentence.value, null);
+});
+
 test('teardown invalidates a pending transcript', async () => {
   const { player, sounds, lesson, resolve } = setup();
   const a = player.playLesson(lesson('A'));

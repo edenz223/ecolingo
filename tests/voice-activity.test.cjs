@@ -17,6 +17,7 @@ function loadTsModule(filePath) {
 const detectorScope = loadTsModule(path.join(root, 'src/utils/voice-activity.ts'));
 const settingsScope = loadTsModule(path.join(root, 'src/utils/settings.ts'));
 const zenScope = loadTsModule(path.join(root, 'src/utils/zen-flow.ts'));
+const playbackOptionsScope = loadTsModule(path.join(root, 'src/utils/playback-options.ts'));
 
 function signal(options) {
   let now = 0;
@@ -102,11 +103,7 @@ const stripModule = (filePath) =>
 const playerCode = stripModule(path.join(root, 'src/modules/player.ts'));
 const recorderCode = stripModule(path.join(root, 'src/modules/recorder.ts'));
 const zenCode = stripModule(path.join(root, 'src/modules/zen.ts'));
-
-const rawScript = fs.readFileSync(path.join(root, 'src/layouts/MainLayout.vue'), 'utf8')
-  .split(/<script setup.*?>/)[1].split('</script>')[0];
-const layout = esbuild.transformSync(rawScript, { loader: 'ts', format: 'esm' }).code
-  .replace(/^import .*;\r?\n/gm, '');
+const sessionCode = stripModule(path.join(root, 'src/modules/learning-session.ts'));
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function setup({ deferredAccess = false, denied = false, saveFailure = false } = {}) {
   let access;
@@ -139,8 +136,9 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
     ready: async () => {}, start(fn, options) { update = fn; this.options = options; }, stop() {}, dispose() {},
   };
   const context = {
-    ref: require('vue').shallowRef, watch: require('vue').watch, onMounted() {}, onUnmounted() {},
+    ref: require('vue').shallowRef, computed: require('vue').computed, watch: require('vue').watch,
     loadSettings: settingsScope.loadSettings, saveSettings: settingsScope.saveSettings,
+    clampPlaybackRate: playbackOptionsScope.clampPlaybackRate,
     createVoiceMonitor: () => monitor,
     createZenCompletion: zenScope.createZenCompletion,
     navigator: { mediaDevices: { getUserMedia: () => denied
@@ -171,21 +169,18 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
       return setTimeout(callback, delay);
     },
     clearTimeout, URL,
-    document: { getElementById: () => ({ scrollIntoView() { scrolls++; } }) },
+    countScroll: () => { scrolls++; },
   };
   vm.createContext(context);
   vm.runInContext(playerCode, context);
   vm.runInContext(recorderCode, context);
   vm.runInContext(zenCode, context);
-  vm.runInContext(layout + `
-    globalThis.h = { player, shadowingMode, isRecording, recordingError, currentPlaybackRate,
-      startSentenceRecording, finishShadowing, toggleShadowingMode,
-      previewRecording, previewClipId, stopPreview, pauseFollowing, resumeFollowing,
-      closeRecordingError, noSpeechSentence, zenMode, zenPhase, zenFirstAttempt, selectPracticeMethod, focusMode,
-      toggleZenMode: () => selectPracticeMethod(zenMode.value ? 'listen' : 'attempt'),
-      toggleZenFirstAttempt: (value) => selectPracticeMethod(value ? 'attempt' : 'replay'),
-      releaseRecordingResources, pendingSaves };
-    recorder.activeLessonId = 'lesson';
+  vm.runInContext(sessionCode + `
+    const session = createLearningSession({ scrollToSentence: countScroll });
+    session.recorder.activeLessonId = 'lesson';
+    globalThis.h = { ...session,
+      toggleZenMode: () => session.selectPracticeMethod(session.zenMode.value ? 'listen' : 'attempt'),
+      toggleZenFirstAttempt: (value) => session.selectPracticeMethod(value ? 'attempt' : 'replay') };
   `, context);
   const { h } = context;
   const sentences = [{ start: 0, end: 1, text: 'one' }, { start: 1, end: 2, text: 'two' }];

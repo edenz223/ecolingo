@@ -91,7 +91,7 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 
 - 行高：正文统一 1.5；字幕条目 1.7（保证跟读认读舒适度）。
 - 字间距 0（标题可轻微负值 `-0.01em`）。
-- 专注模式当前句 `clamp(30px, 4.2vw, 48px)` / 500；相邻句 `clamp(16px, 2.2vw, 24px)` / 400，透明度 0.25，**不加模糊**。
+- 专注模式当前句 `clamp(34px, 4.6vw, 56px)` / 500；相邻句 `clamp(17px, 2.2vw, 26px)` / 400，透明度 0.4，**保留模糊** `filter: blur(2.5px)`（与「专注模式」一节一致）。
 
 ---
 
@@ -112,7 +112,7 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 | 按钮内边距         | `0 10px`       |
 | 组件间 gap         | `4px` 或 `8px` |
 
-- 窗口宽度不超过 600 px 时，底栏隐藏循环与速度控件，跟读、中央播放控制和专注按钮保持单排；更宽窗口保留全部控件，普通与专注模式使用相同规则。
+- 窗口宽度不超过 600 px 时，底栏把循环与速度控件收进「更多」按钮（`more_horiz`）的菜单，跟读、中央播放控制、专注按钮和「更多」保持单排；更宽窗口直接显示全部控件，普通与专注模式使用相同规则。
 
 ---
 
@@ -195,6 +195,7 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 - 空状态：`headphones`
 - 文件操作：`folder_open`
 - 模式切换：`fullscreen` / `fullscreen_exit`
+- 窄窗口溢出菜单：`more_horiz`
 - 循环模式：`repeat` / `repeat_one`
 - 错误提示：`warning`
 - 录音回放：`play_circle` / `stop_circle`
@@ -229,8 +230,8 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 
 ## 字幕列表
 
-- 每个句子条目：`--text-body`（14 px），行高 1.65，圆角 `--radius-md`（6 px）。
-- 当前播放句高亮：背景 `--bg-active`，文字 `--ink-strong`，左 2 px 实色 `--ink-strong` 竖线作为指示条。
+- 每个句子条目：`--text-sentence`（18 px），行高 1.7，内边距 `10px 14px`，圆角 `--radius-md`（6 px）。
+- 当前播放句高亮：`--text-sentence-active`（19 px）/ 600，背景 `--active-bg`，文字 `--ink-strong`，左侧 2 px `--accent` 内阴影竖线作为指示条。
 - 悬停：背景 `--bg-hover`。
 - 句子切换自动滚动居中；用户手动滚动后暂停跟随，显示「回到当前句」。
 - 录音句右侧显示播放/停止录音按钮（`play_circle` / `stop_circle`），颜色 `--ink-muted`，hover 时 `--ink`。
@@ -246,12 +247,19 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 
 ---
 
+## 循环与速度菜单
+
+- 循环菜单（`src/components/LoopModeList.vue`）：单句循环一行带「− 次数 +」步进器；次数 0–99，0 显示为 `∞` 表示无限循环；输入框可直接输入数字或 `∞`，滚轮增减。
+- 速度菜单（`src/components/PlaybackRateList.vue`）：顶部「− 当前倍速 +」步进器（步长 0.1，与 C/X 一致，范围 0.1–4），下方为预设倍速；当前值与预设相等时高亮对应项。
+- 两个组件同时用于底栏按钮菜单和窄窗口的「更多」菜单，选项与格式化逻辑集中在 `src/utils/playback-options.ts`。
+
 ## 对话框
 
 - 遮罩：`rgba(0, 0, 0, 0.15)`，无背景模糊。
 - 卡片：`--bg-raised`，1 px `--border-strong`，圆角 `--radius-lg`（8 px），投影 `--shadow-lg`。
 - 标题 `--text-title` / 500，正文 `--text-body` / `--ink`。
 - 内边距 `24px`。
+- 错误对话框按来源区分标题：课程加载/播放失败显示「课程无法播放」，并提供「重新选择文件夹」；麦克风与录音问题显示「录音提示」。
 
 ---
 
@@ -267,7 +275,9 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 
 ## 快捷键
 
-空格 播放/暂停 | S 跟读 | A/D 上/下一句 | Q/E 上/下一课 | C/X 加/减速 | Z 重置速度
+空格 播放/暂停 | S 跟读 | A/D 上/下一句 | Q/E 上/下一课 | C/X 加/减速 | Z 重置速度 | Esc 退出专注显示
+
+快捷键对话框（标题栏「帮助」）用 `<kbd>` 两列列出全部按键，内容与上面保持同步。专注模式下有菜单打开时，Esc 先关闭菜单，再按一次才退出专注模式。
 
 播放中按 R 跳过播放并录制当前句；录音中按 R 打断并重新录制，开始录制前播放短提示音。重录等待期间保持录音按钮，仅声波播放一次轻微刷新动画；减少动态效果偏好下不播放动画。Ctrl+R 仍保留刷新行为。
 
@@ -279,10 +289,22 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 
 ## 涉及文件
 
-| 文件                                   | 改动范围                                               |
-| -------------------------------------- | ------------------------------------------------------ |
-| `src/css/app.scss`                     | 全部重写：令牌、表面、按钮、滚动条、无障碍             |
-| `src/css/quasar.variables.scss`        | `$primary` 等品牌色                                    |
-| `src/layouts/MainLayout.vue` `<style>` | 标题栏、字幕列表、底栏、切换开关、录音指示器、专注模式 |
-| `src-electron/electron-main.ts`        | `titleBarOverlay` 颜色、关闭 Mica、背景色              |
-| `src/pages/ErrorNotFound.vue`          | 错误页面板样式对齐新系统                               |
+| 文件                                   | 改动范围                                             |
+| -------------------------------------- | ---------------------------------------------------- |
+| `src/css/app.scss`                     | 全部重写：令牌、表面、按钮、滚动条、无障碍           |
+| `src/css/quasar.variables.scss`        | `$primary` 等品牌色                                  |
+| `src/layouts/MainLayout.vue` `<style>` | 空状态卡片                                           |
+| `src/components/AppTitleBar.vue`       | 系统标题栏、窗口控制按钮（样式在 `app.scss`）        |
+| `src/components/LessonHeading.vue`     | 课程标题、句子计数、回到当前句、抽屉开关             |
+| `src/components/LessonDrawer.vue`      | 课程列表抽屉                                         |
+| `src/components/SentenceList.vue`      | 字幕列表、录音回放按钮                               |
+| `src/components/ZenStage.vue`          | 专注模式舞台与邻句模糊                               |
+| `src/components/PlaybackBar.vue`       | 底栏：播放控制、跟读开关、练习方式、循环、速度、更多 |
+| `src/components/RecordingWaveform.vue` | 录音胶囊声波                                         |
+| `src/components/ShortcutsDialog.vue`   | 快捷键对话框                                         |
+| `src/components/AppErrorDialog.vue`    | 课程 / 录音错误对话框                                |
+| `src-electron/electron-main.ts`        | `titleBarOverlay` 颜色、关闭 Mica、背景色            |
+| `src/pages/ErrorNotFound.vue`          | 错误页面板样式对齐新系统                             |
+| `src/components/LoopModeList.vue`      | 循环模式菜单与单句循环次数步进器                     |
+| `src/components/PlaybackRateList.vue`  | 播放速度步进器与预设列表                             |
+| `src/utils/playback-options.ts`        | 循环模式、倍速预设、倍速取整与描述文案               |

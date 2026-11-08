@@ -62,10 +62,10 @@ test('removed twice mode falls back to sequential playback', () => {
 });
 
 test('repeat count persists and rejects malformed stored values', () => {
-  for (const repeatCount of [1, 4, 99]) {
+  for (const repeatCount of [0, 1, 4, 99]) {
     assert.equal(session({ getItem: () => JSON.stringify({ repeatCount }) }).loadSettings().repeatCount, repeatCount);
   }
-  for (const repeatCount of [0, -1, 100, 1.5, '3', null]) {
-    assert.equal(session({ getItem: () => JSON.stringify({ repeatCount }) }).loadSettings().repeatCount, 1);
+  for (const repeatCount of [-1, 100, 1.5, '3', null]) {
+    assert.equal(session({ getItem: () => JSON.stringify({ repeatCount }) }).loadSettings().repeatCount, 0);
   }
 });

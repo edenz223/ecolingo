@@ -444,8 +444,26 @@ button:focus-visible,
   color: var(--active-ink) !important;
 }
 
-// ── Recording error dialog icon ─────────────────────────────────
-.glass-dialog #recording-error-title .q-icon {
+// ── Utilities ───────────────────────────────────────────────────
+// Must follow the .q-tooltip typography rule above so it wins.
+.small-tooltip {
+  font-size: var(--text-caption);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ── Error dialog icon ───────────────────────────────────────────
+.glass-dialog #app-error-title .q-icon {
   display: inline-flex;
   color: $negative;
 }

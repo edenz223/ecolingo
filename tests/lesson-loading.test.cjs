@@ -317,6 +317,13 @@ test('automatic lesson continuation waits for audio and ignores stale loads', as
   assert.equal(player.currentLesson.name, 'B');
 });
 
+test('repeat count 0 loops the current sentence indefinitely', async () => {
+  const { player, sentences } = await run('one');
+  player.setRepeatCount(0);
+  for (let pass = 0; pass < 150; pass++) player.advanceSentence();
+  assert.equal(player.currentSentence.value, sentences[0]);
+});
+
 test('custom repeat counts advance each sentence after exactly N completed passes', async () => {
   for (const count of [1, 2, 5, 99]) {
     const { player, sounds, sentences } = await run('one');
@@ -342,8 +349,8 @@ test('editing count and navigating reset completed passes', async () => {
   player.advanceSentence();
   await player.clickSentence(sentences[1]);
   assert.equal(player.completedPasses, 0);
-  player.setRepeatCount(0);
-  assert.equal(player.repeatCount.value, 1);
+  player.setRepeatCount(-1);
+  assert.equal(player.repeatCount.value, 0);
   player.setRepeatCount(1000);
   assert.equal(player.repeatCount.value, 99);
 });

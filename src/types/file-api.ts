@@ -1,4 +1,5 @@
 import type { Lesson, RecordingMetadata, RecordingClip } from './recording';
+import type { ThemePreference } from './settings';
 
 export interface FileAPI {
   platform: string;
@@ -15,6 +16,8 @@ export interface FileAPI {
   saveRecording(meta: RecordingMetadata, bytes: ArrayBuffer): Promise<RecordingClip>;
   readRecording(id: string): Promise<{ bytes: Uint8Array | Buffer; mime: string }>;
   setFocusMode?(isFocus: boolean): Promise<void>;
+  // Drives prefers-color-scheme for the page and the native window background.
+  setTheme?(theme: ThemePreference): Promise<void>;
   minimize?(): Promise<void>;
   maximize?(): Promise<boolean>;
   close?(): Promise<void>;

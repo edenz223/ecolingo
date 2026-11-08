@@ -13,6 +13,52 @@
       <button
         type="button"
         class="titlebar-menu-btn"
+        aria-label="视图设置"
+        aria-haspopup="menu"
+        :aria-expanded="viewMenuOpen"
+        @dblclick.stop
+      >
+        视图
+        <q-menu
+          v-model="viewMenuOpen"
+          anchor="bottom left"
+          self="top left"
+          :offset="[0, 4]"
+          class="view-menu"
+        >
+          <q-list dense>
+            <q-item-label header>外观</q-item-label>
+            <q-item
+              v-for="option in themeOptions"
+              :key="option.id"
+              clickable
+              :active="theme === option.id"
+              @click="emit('select-theme', option.id)"
+            >
+              <q-item-section>{{ option.label }}</q-item-section>
+              <q-item-section side
+                ><q-icon v-if="theme === option.id" name="check" size="18px"
+              /></q-item-section>
+            </q-item>
+            <q-item-label header>字幕字号</q-item-label>
+            <q-item
+              v-for="option in subtitleSizeOptions"
+              :key="option.id"
+              clickable
+              :active="subtitleSize === option.id"
+              @click="emit('select-subtitle-size', option.id)"
+            >
+              <q-item-section>{{ option.label }}</q-item-section>
+              <q-item-section side
+                ><q-icon v-if="subtitleSize === option.id" name="check" size="18px"
+              /></q-item-section>
+            </q-item>
+          </q-list>
+        </q-menu>
+      </button>
+      <button
+        type="button"
+        class="titlebar-menu-btn"
         aria-label="查看键盘快捷键"
         @click.stop="emit('show-shortcuts')"
       >
@@ -74,12 +120,33 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
+import type { SubtitleSize, ThemePreference } from '../types/settings';
 
+defineProps<{ theme: ThemePreference; subtitleSize: SubtitleSize }>();
 const emit = defineEmits<{
   (event: 'open-folder'): void;
   (event: 'show-shortcuts'): void;
+  (event: 'select-theme', theme: ThemePreference): void;
+  (event: 'select-subtitle-size', size: SubtitleSize): void;
+  // Lets the layout pause space / R shortcuts while the menu is open.
+  (event: 'update:menuOpen', open: boolean): void;
 }>();
+
+const themeOptions: { id: ThemePreference; label: string }[] = [
+  { id: 'system', label: '跟随系统' },
+  { id: 'light', label: '浅色' },
+  { id: 'dark', label: '深色' },
+];
+const subtitleSizeOptions: { id: SubtitleSize; label: string }[] = [
+  { id: 'small', label: '小' },
+  { id: 'medium', label: '中' },
+  { id: 'large', label: '大' },
+];
+
+// Stays open after a choice so sizes can be compared in place.
+const viewMenuOpen = ref(false);
+watch(viewMenuOpen, open => emit('update:menuOpen', open), { flush: 'sync' });
 
 const isMac = window.fileAPI?.platform === 'darwin';
 const isMaximized = ref(false);
@@ -108,3 +175,9 @@ onMounted(() => {
   });
 });
 </script>
+
+<style>
+.view-menu {
+  width: 160px;
+}
+</style>

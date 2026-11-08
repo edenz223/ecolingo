@@ -33,6 +33,8 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   const shadowingMode = ref(settings.shadowing);
   const focusMode = ref(false);
   const resumePoint = ref(settings.resume);
+  const theme = ref(settings.theme);
+  const subtitleSize = ref(settings.subtitleSize);
   // Key of the lesson whose audio and subtitles finished loading; null while switching.
   const loadedLessonKey = ref<string | null>(null);
   // Sentences with at least one take, per lesson key.
@@ -198,6 +200,8 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       zenFirstAttempt,
       practiceMethod,
       resumePoint,
+      theme,
+      subtitleSize,
     ],
     ([
       playbackRate,
@@ -208,6 +212,8 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       zenFirstAttempt,
       practiceMethod,
       resume,
+      theme,
+      subtitleSize,
     ]) => {
       saveSettings({
         playbackRate,
@@ -218,6 +224,8 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
         zenFirstAttempt,
         practiceMethod,
         resume,
+        theme,
+        subtitleSize,
       });
     },
     { flush: 'sync' }
@@ -526,6 +534,8 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     lessonLoading,
     shadowingMode,
     focusMode,
+    theme,
+    subtitleSize,
     currentPlaybackRate,
     zenMode,
     practiceMethod,

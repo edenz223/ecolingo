@@ -33,7 +33,7 @@
 
 ## 播放偏好
 
-通过 `settings.ts` 保存到 `localStorage` 的 `ecolingo.settings.v1`（速度、跟读、循环模式等）。启动恢复偏好时不请求麦克风。
+通过 `settings.ts` 保存到 `localStorage` 的 `ecolingo.settings.v1`（速度、跟读、循环模式、外观 `theme`、字幕字号 `subtitleSize` 等）。启动恢复偏好时不请求麦克风。
 
 `resume` 记录最后所在的课程键、句子开始时间和序号；只在课程加载完成后随当前句更新，切课加载期间不写入。启动后空状态提供「继续练习」，由用户点击后加载该课并跳到该句，不自动播放。
 

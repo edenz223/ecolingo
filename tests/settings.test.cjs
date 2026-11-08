@@ -17,7 +17,7 @@ function session(storage) {
 test('all supported preferences survive a new session, including false values', () => {
   const values = new Map();
   const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
-  const expected = { playbackRate: 1.3, shadowing: true, loopMode: 'one', repeatCount: 1, drawerOpen: false, zenFirstAttempt: false, practiceMethod: 'replay', resume: { lessonKey: 'D:/课程/002 02.mp3', sentenceStart: 6.39, sentenceIndex: 3 } };
+  const expected = { playbackRate: 1.3, shadowing: true, loopMode: 'one', repeatCount: 1, drawerOpen: false, zenFirstAttempt: false, practiceMethod: 'replay', resume: { lessonKey: 'D:/课程/002 02.mp3', sentenceStart: 6.39, sentenceIndex: 3 }, theme: 'dark', subtitleSize: 'large' };
   session(storage).saveSettings(expected);
   assert.equal(JSON.stringify(session(storage).loadSettings()), JSON.stringify(expected));
 });
@@ -83,4 +83,14 @@ test('resume point keeps a valid position and drops malformed ones', () => {
   ]) {
     assert.equal(load(resume), null, JSON.stringify(resume));
   }
+});
+
+test('appearance preferences accept only known values', () => {
+  const load = value => session({ getItem: () => JSON.stringify(value) }).loadSettings();
+  assert.equal(load({}).theme, 'system');
+  assert.equal(load({}).subtitleSize, 'medium');
+  for (const theme of ['system', 'light', 'dark']) assert.equal(load({ theme }).theme, theme);
+  for (const subtitleSize of ['small', 'medium', 'large']) assert.equal(load({ subtitleSize }).subtitleSize, subtitleSize);
+  assert.equal(load({ theme: 'sepia', subtitleSize: 24 }).theme, 'system');
+  assert.equal(load({ theme: 'sepia', subtitleSize: 24 }).subtitleSize, 'medium');
 });

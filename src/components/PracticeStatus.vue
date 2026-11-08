@@ -49,13 +49,13 @@ defineProps<{ status: PracticeStatus }>();
 .practice-steps li {
   padding: 1px 8px;
   border-radius: var(--radius-full);
-  color: var(--ink-faint);
+  color: var(--ink-muted);
   white-space: nowrap;
   transition: color 120ms ease, background-color 120ms ease;
 }
 
 .practice-steps li.is-done {
-  color: var(--ink-muted);
+  color: var(--ink);
 }
 
 .practice-steps li.is-active {

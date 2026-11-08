@@ -32,6 +32,7 @@
 
 - 学习逻辑放在 `learning-session.ts`，不依赖组件与 DOM（滚动等通过选项注入），以便在 node 测试中运行；组件只接收 props、发出事件。
 - 组件 `<style>` 沿用全局（非 scoped）写法，与原 `MainLayout` 一致：Quasar 会把菜单与对话框传送到布局之外；跨组件复用的类（如 `.small-tooltip`）放在 `app.scss`。
+- 外观由主进程 `nativeTheme.themeSource` 驱动（`window:setTheme`），CSS 只用 `prefers-color-scheme`；不要另加 `data-theme` 之类的选择器。
 - Howler 的 `playing()` 不是响应式；需要随播放状态刷新的视图读取 `player.playbackRevision`（`learning-session.isPlaybackActive()` 已处理）。
 
 - 文件系统操作在 Electron 主进程，通过 preload 暴露窄范围方法；不暴露原始 IPC 或 Node API。

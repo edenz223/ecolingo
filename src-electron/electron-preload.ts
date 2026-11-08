@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent, webUtils } from 'electron';
 import type { FileAPI } from '../src/types/file-api';
 import type { Lesson, RecordingMetadata } from '../src/types/recording';
+import type { ThemePreference } from '../src/types/settings';
 
 const fileAPI: FileAPI = {
   platform: process.platform,
@@ -18,6 +19,7 @@ const fileAPI: FileAPI = {
     ipcRenderer.invoke('recordings:save', meta, bytes),
   readRecording: (id: string) => ipcRenderer.invoke('recordings:read', id),
   setFocusMode: (isFocus: boolean) => ipcRenderer.invoke('window:setFocusMode', isFocus),
+  setTheme: (theme: ThemePreference) => ipcRenderer.invoke('window:setTheme', theme),
   minimize: () => ipcRenderer.invoke('window:minimize'),
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close'),

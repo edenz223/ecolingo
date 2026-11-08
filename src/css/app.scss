@@ -1,6 +1,10 @@
 // EcoLingo minimal design system. Global rules – Quasar teleports
 // menus, dialogs and tooltips outside the layout component.
+//
+// Colors follow prefers-color-scheme; the main process drives it through
+// nativeTheme.themeSource, so the 外观 setting needs no extra selectors here.
 :root {
+  color-scheme: light dark;
   --bg-base: #ffffff;
   --bg-surface: #f5f5f4;
   --bg-raised: #ffffff;
@@ -10,7 +14,7 @@
 
   --ink-strong: #1c1917;
   --ink: #44403c;
-  --ink-muted: #78716c;
+  --ink-muted: #6f6863;
   --ink-faint: #a8a29e;
 
   --border: rgba(0, 0, 0, 0.08);
@@ -18,13 +22,15 @@
 
   --accent: rgb(0, 122, 204);
 
-  --active-ink: rgb(0, 122, 204);
+  // Darker than --accent so selected text stays above 4.5:1 on its tint.
+  --active-ink: #0066ad;
   --active-bg: rgba(0, 122, 204, 0.08);
 
   // Recording coral matches the recording play button; text stays above 4.5:1.
-  --recording-ink: #c43c3c;
+  --recording-ink: #b53434;
   --recording-bg: rgba(222, 85, 85, 0.1);
-  --warning-ink: #a16207;
+  --warning-ink: #9a5b05;
+  --danger-ink: #dc2626;
 
   --focus-ring: 2px solid rgba(0, 122, 204, 0.4);
   --focus-offset: 2px;
@@ -39,6 +45,9 @@
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
 
+  --backdrop: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   --font-display: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC',
     sans-serif;
@@ -48,6 +57,59 @@
   --text-caption: 12px;
   --text-control: 13px;
   --text-title: 18px;
+  --text-zen: clamp(34px, 4.6vw, 56px);
+  --text-zen-neighbor: clamp(17px, 2.2vw, 26px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-base: #1a1918;
+    --bg-surface: #222120;
+    --bg-raised: #2b2a28;
+    --bg-sunken: #141312;
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-active: rgba(255, 255, 255, 0.08);
+
+    --ink-strong: #f5f5f4;
+    --ink: #d6d3d1;
+    --ink-muted: #a8a29e;
+    --ink-faint: #6f6964;
+
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+
+    --active-ink: #5eb1f2;
+    --active-bg: rgba(56, 152, 236, 0.18);
+
+    --recording-ink: #f28b82;
+    --recording-bg: rgba(222, 85, 85, 0.2);
+    --warning-ink: #e3b341;
+    --danger-ink: #f87171;
+
+    --focus-ring: 2px solid rgba(94, 177, 242, 0.6);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.45);
+
+    --backdrop: rgba(0, 0, 0, 0.45);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  }
+}
+
+// 字幕字号: medium uses the defaults above.
+:root[data-subtitle-size='small'] {
+  --text-sentence-active: 17px;
+  --text-sentence: 16px;
+  --text-zen: clamp(28px, 3.8vw, 46px);
+  --text-zen-neighbor: clamp(15px, 1.9vw, 22px);
+}
+
+:root[data-subtitle-size='large'] {
+  --text-sentence-active: 22px;
+  --text-sentence: 21px;
+  --text-zen: clamp(40px, 5.4vw, 66px);
+  --text-zen-neighbor: clamp(19px, 2.5vw, 30px);
 }
 
 html {
@@ -303,7 +365,7 @@ body,
 }
 
 .q-dialog__backdrop {
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--backdrop);
 }
 
 .q-tooltip {
@@ -455,10 +517,20 @@ button:focus-visible,
   font-size: var(--text-caption);
 }
 
+// Quasar's text utilities use the brand hexes, which fall below 4.5:1 for
+// small text (and on dark surfaces); filled bg-primary buttons are unaffected.
+.text-primary {
+  color: var(--active-ink) !important;
+}
+
+.text-negative {
+  color: var(--danger-ink) !important;
+}
+
 // ── Error dialog icon ───────────────────────────────────────────
 .glass-dialog #app-error-title .q-icon {
   display: inline-flex;
-  color: $negative;
+  color: var(--danger-ink);
 }
 
 // ── Error page ──────────────────────────────────────────────────
@@ -500,10 +572,15 @@ button:focus-visible,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
   border: 1px solid transparent;
   border-radius: var(--radius-full);
+}
+
+// Quasar's thumb is black at low opacity; ink keeps it visible on dark surfaces.
+.q-scrollarea__thumb {
+  background: var(--ink-strong);
 }
 
 // ── Focus-mode footer ───────────────────────────────────────────

@@ -5,7 +5,15 @@
     :class="{ 'windows-titlebar': isWindows, 'app-shell--focus': focusMode }"
   >
     <q-header v-if="!focusMode" class="glass-header">
-      <AppTitleBar @open-folder="session.openFolder" @show-shortcuts="showShortcuts = true" />
+      <AppTitleBar
+        :theme="theme"
+        :subtitle-size="subtitleSize"
+        @open-folder="session.openFolder"
+        @show-shortcuts="showShortcuts = true"
+        @select-theme="value => (theme = value)"
+        @select-subtitle-size="value => (subtitleSize = value)"
+        @update:menu-open="viewMenuOpen = $event"
+      />
       <LessonHeading
         :lesson-name="lessons[currentLessonIndex]?.name || player.currentLesson?.name || ''"
         :sentence-position="Math.max(1, session.currentSentenceIndex() + 1)"
@@ -143,6 +151,7 @@ const isWindows = window.fileAPI?.platform === 'win32';
 const showShortcuts = ref(false);
 const pointerInteraction = ref(false);
 const controlsMenuOpen = ref(false);
+const viewMenuOpen = ref(false);
 const playbackBar = ref<InstanceType<typeof PlaybackBar> | null>(null);
 
 const session = createLearningSession({ scrollToSentence, notify: showHud });
@@ -155,6 +164,8 @@ const {
   lessonLoading,
   shadowingMode,
   focusMode,
+  theme,
+  subtitleSize,
   currentPlaybackRate,
   practiceMethod,
   isRecording,
@@ -214,8 +225,24 @@ watch(focusMode, val => {
   window.fileAPI?.setFocusMode?.(val);
 });
 
+watch(theme, value => window.fileAPI?.setTheme?.(value), { immediate: true });
+
+// Subtitle size tokens are switched on <html> in app.scss.
+watch(
+  subtitleSize,
+  value => {
+    document.documentElement.dataset.subtitleSize = value;
+  },
+  { immediate: true }
+);
+
 function isKeyboardBlocked() {
-  return Boolean(activeError.value) || showShortcuts.value || controlsMenuOpen.value;
+  return (
+    Boolean(activeError.value) ||
+    showShortcuts.value ||
+    controlsMenuOpen.value ||
+    viewMenuOpen.value
+  );
 }
 
 const playbackShortcut = createPlaybackShortcut({
@@ -373,7 +400,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--backdrop);
   pointer-events: none;
 }
 

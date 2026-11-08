@@ -1,4 +1,12 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Menu,
+  MenuItemConstructorOptions,
+  nativeTheme,
+} from 'electron';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -95,6 +103,35 @@ ipcMain.handle('window:setFocusMode', (_event, isFocus) => {
   }
 });
 
+// 外观: the renderer owns the preference; a copy here lets the next launch paint
+// the right background before the page loads.
+type ThemeSource = 'system' | 'light' | 'dark';
+const themeSources: ThemeSource[] = ['system', 'light', 'dark'];
+const appearanceFile = () => path.join(app.getPath('userData'), 'appearance.json');
+
+function readThemeSource(): ThemeSource {
+  try {
+    const { theme } = JSON.parse(fs.readFileSync(appearanceFile(), 'utf8'));
+    return themeSources.includes(theme) ? theme : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+// Matches --bg-base in src/css/app.scss.
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#1a1918' : '#ffffff');
+
+ipcMain.handle('window:setTheme', (_event, source: unknown) => {
+  if (!themeSources.includes(source as ThemeSource)) return;
+  if (nativeTheme.themeSource === source) return;
+  nativeTheme.themeSource = source as ThemeSource;
+  try {
+    fs.writeFileSync(appearanceFile(), JSON.stringify({ theme: source }));
+  } catch {
+    // Only the next launch's first frame depends on this copy.
+  }
+});
+
 ipcMain.handle('window:minimize', () => {
   mainWindow?.minimize();
 });
@@ -146,7 +183,7 @@ function createWindow() {
     fullscreenable: true,
     thickFrame: true,
     useContentSize: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: windowBackground(),
     webPreferences: {
       // Keep the audio-clock checks running while the lesson window is minimized.
       backgroundThrottling: false,
@@ -192,7 +229,13 @@ if (!app.requestSingleInstanceLock()) {
     if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.focus();
   });
-  app.whenReady().then(createWindow);
+  app.whenReady().then(() => {
+    nativeTheme.themeSource = readThemeSource();
+    nativeTheme.on('updated', () => {
+      mainWindow?.setBackgroundColor(windowBackground());
+    });
+    createWindow();
+  });
 }
 
 app.on('window-all-closed', () => {

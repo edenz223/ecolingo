@@ -49,7 +49,7 @@ defineProps<{
 }
 .zen-current {
   font-family: var(--font-display);
-  font-size: clamp(34px, 4.6vw, 56px);
+  font-size: var(--text-zen);
   max-width: min(1100px, 92vw);
   line-height: 1.55;
   color: var(--ink-strong);
@@ -61,7 +61,7 @@ defineProps<{
   max-height: 3.2em;
   max-width: min(900px, 88vw);
   overflow: hidden;
-  font-size: clamp(17px, 2.2vw, 26px);
+  font-size: var(--text-zen-neighbor);
   line-height: 1.5;
   opacity: 0.4;
   filter: blur(2.5px);

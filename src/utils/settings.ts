@@ -1,4 +1,11 @@
-import type { UserSettings, PracticeMethod, LoopMode, ResumePoint } from '../types/settings';
+import type {
+  UserSettings,
+  PracticeMethod,
+  LoopMode,
+  ResumePoint,
+  ThemePreference,
+  SubtitleSize,
+} from '../types/settings';
 
 const defaults: UserSettings = {
   playbackRate: 1,
@@ -9,6 +16,8 @@ const defaults: UserSettings = {
   zenFirstAttempt: true,
   practiceMethod: 'listen',
   resume: null,
+  theme: 'system',
+  subtitleSize: 'medium',
 };
 const storageKey = 'ecolingo.settings.v1';
 
@@ -33,6 +42,12 @@ export function normalizeSettings(value: unknown): UserSettings {
     settings.repeatCount = obj.repeatCount;
   }
   settings.resume = normalizeResumePoint(obj.resume);
+  if (['system', 'light', 'dark'].includes(obj.theme as string)) {
+    settings.theme = obj.theme as ThemePreference;
+  }
+  if (['small', 'medium', 'large'].includes(obj.subtitleSize as string)) {
+    settings.subtitleSize = obj.subtitleSize as SubtitleSize;
+  }
   const rate = obj.playbackRate;
   if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0.1 && rate <= 4) {
     settings.playbackRate = rate;

@@ -3,21 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const vm = require('node:vm');
-const esbuild = require('esbuild');
-const raw = fs.readFileSync(path.join(__dirname, '../src-electron/recording-store.ts'), 'utf8');
-const source = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
-const scope = {
+const { loadTs } = require('./helpers/load-ts.cjs');
+const { RecordingStore, lessonIdentity, createLessonIdentityCache } = loadTs('src-electron/recording-store.ts', {
   require,
   Buffer,
   console,
   setTimeout,
   clearTimeout,
-  exports: {},
-  module: { exports: {} }
-};
-vm.runInNewContext(source, scope);
-const { RecordingStore, lessonIdentity, createLessonIdentityCache } = scope.module.exports;
+});
 
 
 test('durable recordings, isolated lessons, validation and failed-save rollback', async () => {

@@ -30,65 +30,37 @@ export interface RecorderCallbacks {
 }
 
 export class RecorderManager {
-  isRecording: Ref<boolean>;
-  recordingLevel: Ref<number>;
-  recordingStatus: Ref<string>;
-  recordingError: Ref<string>;
-  recordings: Ref<Record<number, RecordingClip>>;
-  noSpeechSentence: Ref<number | null>;
-  previewClipId: Ref<string | null>;
-
-  mediaRecorder: MediaRecorder | null;
-  mediaStream: MediaStream | null;
-  recordingChunks: BlobPart[];
-  voiceMonitor: any;
-  recordingAttempt: number;
-  recordingStartedAt: number;
-  completedShadow: any;
-  pendingRecordingSentence: (RecordingMetadata & { duration?: number }) | null;
-  recorderInitPromise: Promise<boolean> | null;
-  discardNextRecording: boolean;
-  previewAudio: HTMLAudioElement | null;
-  previewUrl: string | null;
-  previewSession: number;
-  activeLessonId: string | null;
-  microphoneSession: number;
-  noSpeechNoticeTimer: ReturnType<typeof setTimeout> | null;
-  pendingSaves: Set<Promise<any>>;
-  callbacks: RecorderCallbacks;
-  activeRecordingRequest: { sentence: Sentence; options: RecordingOptions } | null = null;
-  restartCue: ReturnType<typeof playRecordingRestartCue> | null = null;
+  isRecording = ref(false);
+  recordingLevel = ref(0);
+  recordingStatus = ref('');
+  recordingError = ref('');
+  recordings: Ref<Record<number, RecordingClip>> = ref({});
+  noSpeechSentence: Ref<number | null> = ref(null);
+  previewClipId: Ref<string | null> = ref(null);
   isPreparingRecording = ref(false);
   recordingRevision = ref(0);
 
-  constructor(callbacks: RecorderCallbacks = {}) {
-    this.isRecording = ref(false);
-    this.recordingLevel = ref(0);
-    this.recordingStatus = ref('');
-    this.recordingError = ref('');
-    this.recordings = ref({});
-    this.noSpeechSentence = ref(null);
-    this.previewClipId = ref(null);
+  mediaRecorder: MediaRecorder | null = null;
+  mediaStream: MediaStream | null = null;
+  recordingChunks: BlobPart[] = [];
+  voiceMonitor: any = null;
+  recordingAttempt = 0;
+  recordingStartedAt = 0;
+  completedShadow: any = null;
+  pendingRecordingSentence: (RecordingMetadata & { duration?: number }) | null = null;
+  recorderInitPromise: Promise<boolean> | null = null;
+  discardNextRecording = false;
+  previewAudio: HTMLAudioElement | null = null;
+  previewUrl: string | null = null;
+  previewSession = 0;
+  activeLessonId: string | null = null;
+  microphoneSession = 0;
+  noSpeechNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+  pendingSaves = new Set<Promise<any>>();
+  activeRecordingRequest: { sentence: Sentence; options: RecordingOptions } | null = null;
+  restartCue: ReturnType<typeof playRecordingRestartCue> | null = null;
 
-    this.mediaRecorder = null;
-    this.mediaStream = null;
-    this.recordingChunks = [];
-    this.voiceMonitor = null;
-    this.recordingAttempt = 0;
-    this.recordingStartedAt = 0;
-    this.completedShadow = null;
-    this.pendingRecordingSentence = null;
-    this.recorderInitPromise = null;
-    this.discardNextRecording = false;
-    this.previewAudio = null;
-    this.previewUrl = null;
-    this.previewSession = 0;
-    this.activeLessonId = null;
-    this.microphoneSession = 0;
-    this.noSpeechNoticeTimer = null;
-    this.pendingSaves = new Set();
-    this.callbacks = callbacks;
-  }
+  constructor(public callbacks: RecorderCallbacks = {}) {}
 
   setCallbacks(callbacks: Partial<RecorderCallbacks>) {
     Object.assign(this.callbacks, callbacks);
@@ -565,9 +537,8 @@ export class RecorderManager {
     this.microphoneSession++;
     this.recorderInitPromise = null;
     this.stopPreview();
+    // Listeners ignore events once mediaRecorder is replaced or cleared.
     if (this.mediaRecorder) {
-      this.mediaRecorder.removeEventListener('dataavailable', this.handleRecorderData);
-      this.mediaRecorder.removeEventListener('stop', this.handleRecorderStop);
       if (this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
       this.mediaRecorder = null;
     }

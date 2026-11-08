@@ -18,9 +18,7 @@
           aria-label="打开其他文件夹"
           @click="emit('open-folder')"
         >
-          <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-            >打开其他文件夹</q-tooltip
-          >
+          <HintTooltip>打开其他文件夹</HintTooltip>
         </q-btn>
       </div>
       <div v-if="lessons.length > filterThreshold" class="lesson-drawer__filter">
@@ -66,6 +64,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import HintTooltip from './HintTooltip.vue';
 import { filterLessons, lessonFolderName, lessonKey } from '../utils/lesson-library';
 import type { Lesson } from '../types/recording';
 

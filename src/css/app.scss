@@ -541,34 +541,6 @@ button:focus-visible,
   color: var(--danger-ink);
 }
 
-// ── Error page ──────────────────────────────────────────────────
-.glass-error-page {
-  color: var(--ink);
-  background: transparent;
-}
-
-.glass-error-panel {
-  width: min(560px, 92vw);
-  padding: 48px 32px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
-}
-
-.glass-error-code {
-  color: var(--ink-strong);
-  font-size: clamp(48px, 10vh, 80px);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: 0;
-}
-
-.glass-error-copy {
-  margin-top: 24px;
-  color: var(--ink-muted);
-}
-
 // ── Scrollbar ───────────────────────────────────────────────────
 ::-webkit-scrollbar {
   width: 6px;

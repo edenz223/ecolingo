@@ -18,9 +18,7 @@
       class="follow-btn"
       @click="emit('resume-following')"
     >
-      <q-tooltip :delay="400" :hide-delay="0" :transition-duration="100" class="small-tooltip"
-        >回到当前句</q-tooltip
-      >
+      <HintTooltip>回到当前句</HintTooltip>
     </q-btn>
     <q-btn
       flat
@@ -59,6 +57,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import type { QTooltip } from 'quasar';
+import HintTooltip from './HintTooltip.vue';
 
 defineProps<{
   lessonName: string;

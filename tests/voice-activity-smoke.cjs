@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const assert = require('node:assert/strict');
-const esbuild = require('esbuild');
+const { stripModule } = require('./helpers/load-ts.cjs');
 app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'ecolingo-vad-')));
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -14,11 +14,7 @@ app.whenReady().then(async () => {
   } });
   try {
     await window.loadURL('data:text/html,<html><body>Voice activity regression</body></html>');
-    const raw = fs.readFileSync(path.join(__dirname, '../src/utils/voice-activity.ts'), 'utf8');
-    const source = esbuild.transformSync(raw, { loader: 'ts', format: 'esm' }).code
-      .replace(/^import .*;\r?\n/gm, '')
-      .replace(/^export function/gm, 'function')
-      .replace(/export \{[\s\S]*?\};?/gm, '');
+    const source = stripModule('src/utils/voice-activity.ts');
     const result = await window.webContents.executeJavaScript(`(async () => {
       ${source}
       const audio = new AudioContext();

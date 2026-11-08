@@ -1,19 +1,9 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
 const test = require('node:test');
-const esbuild = require('esbuild');
+const { loadTs } = require('./helpers/load-ts.cjs');
 
-function load(file, dependencies = {}, globals = {}) {
-  const source = esbuild.transformSync(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), {
-    loader: 'ts',
-    format: 'cjs',
-  }).code;
-  const scope = { module: { exports: {} }, require: name => dependencies[name], ...globals };
-  vm.runInNewContext(source, scope);
-  return scope.module.exports;
-}
+const load = (file, dependencies = {}, globals = {}) =>
+  loadTs(file, { require: name => dependencies[name], ...globals });
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 async function setup(zenPhase = null) {

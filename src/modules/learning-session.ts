@@ -7,7 +7,7 @@ import { loadSettings, saveSettings } from '../utils/settings';
 import { clampPlaybackRate } from '../utils/playback-options';
 import { derivePracticeStatus } from '../utils/practice-status';
 import { findResumeTarget, lessonKey } from '../utils/lesson-library';
-import type { Lesson, RecordingClip } from '../types/recording';
+import type { Lesson } from '../types/recording';
 import type { Sentence } from '../types/subtitles';
 import type { PracticeMethod } from '../types/settings';
 
@@ -131,27 +131,13 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     onSentenceBoundary: (sentence: Sentence) => {
       if (compare.handleBoundary(sentence)) return true;
       if (zenMode.value && zenPhase.value === 'reference') {
-        player.sound.value?.pause();
-        if (player.stepTimerId) {
-          clearTimeout(player.stepTimerId);
-          player.stepTimerId = null;
-        }
         zenPhase.value = 'second';
-        player.isShadowing.value = true;
-        startSentenceRecording(sentence);
+        beginShadowing(sentence);
         return true;
       }
-      if (shadowingMode.value && !zenMode.value) {
-        if (!player.isShadowing.value) {
-          player.sound.value?.pause();
-          if (player.stepTimerId) {
-            clearTimeout(player.stepTimerId);
-            player.stepTimerId = null;
-          }
-          player.isShadowing.value = true;
-          startSentenceRecording(sentence);
-          return true;
-        }
+      if (shadowingMode.value && !zenMode.value && !player.isShadowing.value) {
+        beginShadowing(sentence);
+        return true;
       }
       return false;
     },
@@ -171,7 +157,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       zen.resetSession();
       recorder.stopPreview();
       recorder.clearNoSpeechNotice();
-      stopSentenceRecording(true);
+      recorder.stopSentenceRecording(true);
       if (zenMode.value) recorder.releaseRecordingResources();
     },
     onReleaseLesson: () => {
@@ -195,43 +181,19 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   });
 
   watch(
-    [
-      currentPlaybackRate,
-      shadowingMode,
-      player.loopMode,
-      player.repeatCount,
-      drawerOpen,
-      zenFirstAttempt,
-      practiceMethod,
-      resumePoint,
-      theme,
-      subtitleSize,
-    ],
-    ([
-      playbackRate,
-      shadowing,
-      loopMode,
-      repeatCount,
-      drawerOpen,
-      zenFirstAttempt,
-      practiceMethod,
-      resume,
-      theme,
-      subtitleSize,
-    ]) => {
-      saveSettings({
-        playbackRate,
-        shadowing,
-        loopMode,
-        repeatCount,
-        drawerOpen,
-        zenFirstAttempt,
-        practiceMethod,
-        resume,
-        theme,
-        subtitleSize,
-      });
-    },
+    () => ({
+      playbackRate: currentPlaybackRate.value,
+      shadowing: shadowingMode.value,
+      loopMode: player.loopMode.value,
+      repeatCount: player.repeatCount.value,
+      drawerOpen: drawerOpen.value,
+      zenFirstAttempt: zenFirstAttempt.value,
+      practiceMethod: practiceMethod.value,
+      resume: resumePoint.value,
+      theme: theme.value,
+      subtitleSize: subtitleSize.value,
+    }),
+    saveSettings,
     { flush: 'sync' }
   );
 
@@ -302,13 +264,9 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     zen.selectPracticeMethod(method);
   }
 
-  function closeRecordingError() {
-    recorder.closeRecordingError();
-  }
-
   function closeActiveError() {
     if (lessonError.value) lessonError.value = '';
-    else closeRecordingError();
+    else recorder.closeRecordingError();
   }
 
   function reopenFolderAfterError() {
@@ -395,50 +353,21 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     if (!opened) options.notify?.('无法打开拖入的项目');
   }
 
-  function beforeSentence() {
-    const current = player.currentSentence.value;
-    if (!current) return;
-    const idx = player.parsedSentences.value.indexOf(current);
-    if (idx > 0) {
-      if (player.currentPause) clearTimeout(player.currentPause);
-      player.clickSentence(player.parsedSentences.value[idx - 1]);
-    }
+  function stepSentence(offset: number) {
+    const idx = currentSentenceIndex();
+    const target = idx >= 0 ? player.parsedSentences.value[idx + offset] : undefined;
+    if (!target) return;
+    if (player.currentPause) clearTimeout(player.currentPause);
+    player.clickSentence(target);
   }
 
-  function nextSentence() {
-    const current = player.currentSentence.value;
-    if (!current) return;
-    const idx = player.parsedSentences.value.indexOf(current);
-    if (idx >= 0 && idx < player.parsedSentences.value.length - 1) {
-      if (player.currentPause) clearTimeout(player.currentPause);
-      player.clickSentence(player.parsedSentences.value[idx + 1]);
-    }
-  }
-
-  function prev() {
-    if (player.sound.value?.playing()) {
-      player.sound.value.pause();
-    }
-
-    if (currentLessonIndex.value > 0) {
-      currentLessonIndex.value--;
-    } else {
-      currentLessonIndex.value = lessons.value.length - 1;
-    }
-    playLesson(currentLessonIndex.value);
-  }
-
-  function next() {
-    if (player.sound.value?.playing()) {
-      player.sound.value.pause();
-    }
-
-    if (currentLessonIndex.value < lessons.value.length - 1) {
-      currentLessonIndex.value++;
-    } else {
-      currentLessonIndex.value = 0;
-    }
-    playLesson(currentLessonIndex.value);
+  // Wraps around the list; with no lesson selected, previous opens the last and next the first.
+  function stepLesson(offset: number) {
+    if (player.sound.value?.playing()) player.sound.value.pause();
+    const count = lessons.value.length;
+    const index = currentLessonIndex.value;
+    if (!count) return;
+    playLesson(index < 0 ? (offset < 0 ? count - 1 : 0) : (index + offset + count) % count);
   }
 
   function openFolder() {
@@ -461,6 +390,17 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     player.setPlaybackRate(clampPlaybackRate(rate));
   }
 
+  // Pauses the reference at a sentence boundary and records the learner.
+  function beginShadowing(sentence: Sentence) {
+    player.sound.value?.pause();
+    if (player.stepTimerId) {
+      clearTimeout(player.stepTimerId);
+      player.stepTimerId = null;
+    }
+    player.isShadowing.value = true;
+    startSentenceRecording(sentence);
+  }
+
   function startSentenceRecording(sentence: Sentence) {
     recorder.startSentenceRecording(sentence, {
       lessonName: player.currentLesson?.name || '',
@@ -481,25 +421,9 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     });
   }
 
-  function stopSentenceRecording(discard = false) {
-    recorder.stopSentenceRecording(discard);
-  }
-
-  function previewRecording(clip: RecordingClip, onComplete: (() => void) | null = null) {
-    return recorder.previewRecording(clip, onComplete);
-  }
-
-  function stopPreview() {
-    recorder.stopPreview();
-  }
-
   function playUserRecording(sentenceStart: number) {
     if (compare.isActive()) stopCompare();
     recorder.playUserRecording(sentenceStart);
-  }
-
-  function releaseRecordingResources() {
-    recorder.releaseRecordingResources();
   }
 
   function recordCurrentSentence() {
@@ -555,7 +479,6 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     zenFirstAttempt,
     zenPhase,
     isRecording,
-    recordingError,
     activeError,
     practiceStatus,
     resumeTarget,
@@ -564,16 +487,13 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     compareSentenceStart: compare.sentenceStart,
     recordingRevision: recorder.recordingRevision,
     recordingLevel: recorder.recordingLevel,
-    recordingStatus: recorder.recordingStatus,
     recordings: recorder.recordings,
     noSpeechSentence: recorder.noSpeechSentence,
     previewClipId: recorder.previewClipId,
-    pendingSaves: recorder.pendingSaves,
     isPlaybackActive,
     currentSentenceIndex,
     zenNeighbor,
     selectPracticeMethod,
-    closeRecordingError,
     closeActiveError,
     reopenFolderAfterError,
     pauseFollowing,
@@ -581,21 +501,16 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     playLesson,
     resumeLesson,
     togglePlay,
-    beforeSentence,
-    nextSentence,
-    prev,
-    next,
+    previousSentence: () => stepSentence(-1),
+    nextSentence: () => stepSentence(1),
+    previousLesson: () => stepLesson(-1),
+    nextLesson: () => stepLesson(1),
     openFolder,
     openFolderPath,
     toggleShadowingMode,
     setPlaybackRate,
-    startSentenceRecording,
     finishShadowing,
-    stopSentenceRecording,
-    previewRecording,
-    stopPreview,
     playUserRecording,
-    releaseRecordingResources,
     recordCurrentSentence,
     toggleCompare,
     start,

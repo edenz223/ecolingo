@@ -1,29 +1,24 @@
 # 开发与验证
 
-命令以 `package.json` 为准。构建目标为 Node 20；仓库同时保留 npm 和 Yarn 锁文件，沿用当前任务所用包管理器，避免无关锁文件变更。
+命令以 `package.json` 为准。构建目标为 Node 20；包管理器为 Yarn 1，只维护 `yarn.lock`。
 
-- `npm run dev`：启动 Electron 开发模式。
-- `npm run build`：构建 Electron 应用。
+- `yarn dev`：启动 Electron 开发模式。
+- `yarn build`：构建 Electron 应用。
+- `yarn test`：运行 `tests/*.test.cjs` 全部单元测试。
+- `yarn test:smoke`：Electron 冒烟测试（需图形环境；UI 冒烟测试读取 `yarn build` 产物）。
 - 没有独立 typecheck 脚本。
 
 ## 按改动选择检查
 
-| 改动                                      | 检查                                            |
-| ----------------------------------------- | ----------------------------------------------- |
-| 代码                                      | `npm run lint`                                  |
-| 构建、主进程、preload 或依赖              | 另加 `npm run build`                            |
-| VAD 核心逻辑                              | `node --test tests/voice-activity.test.cjs`     |
-| 偏好设置逻辑                              | `node --test tests/settings.test.cjs`           |
-| 键盘快捷键分发                            | `node --test tests/keyboard-shortcuts.test.cjs` |
-| 练习状态推导                              | `node --test tests/practice-status.test.cjs`    |
-| 课程键、筛选、继续上次                    | `node --test tests/lesson-library.test.cjs`     |
-| 文件夹扫描与配对                          | `node --test tests/file-processor.test.cjs`     |
-| 学习会话协调（跟读、Zen、回放、A/B 对比） | `node --test tests/voice-activity.test.cjs`     |
-| 录音存储逻辑                              | `npm run test:recordings`                       |
-| 其他已有测试覆盖的核心逻辑                | 运行对应测试文件                                |
-| 纯文档或样式                              | 不运行无关测试                                  |
+| 改动                         | 检查                                    |
+| ---------------------------- | --------------------------------------- |
+| 代码                         | `yarn lint`、`yarn test`                |
+| 构建、主进程、preload 或依赖 | 另加 `yarn build`                       |
+| 界面布局或交互               | 有图形环境时另加 `yarn test:smoke`      |
+| 只需单个领域                 | `node --test tests/<对应文件>.test.cjs` |
+| 纯文档或样式                 | 不运行无关测试                          |
 
-`npm test` 只是占位脚本，不能作为测试通过的依据。修复易复发 bug 时优先添加回归测试。
+测试通过 `tests/helpers/` 用 esbuild 转译 TS 源码，在 `vm` 中运行，不依赖 DOM。修复易复发 bug 时优先添加回归测试。
 
 ## 交付
 
@@ -31,4 +26,4 @@
 
 ## 格式化
 
-仅格式化改动文件：`npx prettier --write <文件路径...>`。不要使用会处理整个仓库的 `npm run format`；避免整文件无关格式化。
+仅格式化改动文件：`npx prettier --write <文件路径...>`；避免整文件无关格式化。

@@ -1,48 +1,10 @@
 // Built UI with sample lesson files and an isolated, read-only recording fixture.
-const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const root = path.join(__dirname, '..');
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecolingo-ui-'));
-app.setPath('userData', path.join(temp, 'profile'));
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-const preload = path.join(temp, 'preload.cjs');
-fs.writeFileSync(preload, `
-  const { contextBridge } = require('electron');
-  const fs = require('node:fs');
-  const folder = ${JSON.stringify(path.join(root, 'resources'))};
-  let selected;
-  const lesson = { name: '002 02', audio: { path: folder, name: '002 02.mp3' }, lyrics: { path: folder, name: '002 02.lrc' } };
-  contextBridge.exposeInMainWorld('fileAPI', {
-    platform: 'win32',
-    onFolderSelected(fn) { selected = fn; },
-    openFolder() { selected({}, [lesson]); },
-    recordingIdentity: async () => 'fixture',
-    listRecordings: async () => [{ id: 'fixture-take', start: 6.39, text: 'Fixture', lessonName: lesson.name, createdAt: Date.now() }],
-    readTextFile: async (file) => fs.readFileSync(file, 'utf8'),
-    readRecording: async () => ({ bytes: fs.readFileSync(folder + '/002 02.mp3'), mime: 'audio/mpeg' }),
-  });
-`);
-app.whenReady().then(async () => {
-  const win = new BrowserWindow({ show: false, width: 1100, height: 800,
-    frame: true, resizable: true, maximizable: true, thickFrame: true,
-    titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#5c6b77', height: 34 },
-    webPreferences: { preload, sandbox: false, contextIsolation: true, webSecurity: false, backgroundThrottling: false, offscreen: true } });
-  win.webContents.setAudioMuted(true);
-  const evaluate = (source) => win.webContents.executeJavaScript(source).catch(error => { throw new Error(source + ': ' + error.message); });
-  async function waitFor(condition) {
-    for (let count = 0; count < 100; count++) {
-      if (await evaluate(condition)) return;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    throw new Error('UI did not become ready: ' + condition);
-  }
-  try {
-    await win.loadFile(path.join(root, 'dist/electron/UnPackaged/index.html'));
-    await waitFor(`Boolean(document.querySelector('.lesson-empty button'))`);
+const { runUiSmoke } = require('./helpers/electron-ui.cjs');
+
+runUiSmoke({ prefix: 'ecolingo-ui-' }, async ({ win, temp, evaluate, waitFor, load }) => {
     assert.equal(win.isMaximizable(), true);
     const initialWindowWidth = await evaluate(`window.innerWidth`);
     win.maximize();
@@ -168,7 +130,7 @@ app.whenReady().then(async () => {
     assert.equal(saved.loopMode, 'one');
     assert.equal('volume' in saved, false);
     assert.equal('muted' in saved, false);
-    await win.loadFile(path.join(root, 'dist/electron/UnPackaged/index.html'));
+    await load();
     await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
     assert.ok(await evaluate(`document.querySelector('[aria-label="播放速度"]').textContent.includes('1.25')`));
     assert.ok(await evaluate(`Boolean(document.querySelector('[aria-label="循环模式：单句循环4次"]'))`));
@@ -182,11 +144,4 @@ app.whenReady().then(async () => {
     console.log('PASS settings survive reload: playback speed and repeat one');
     console.log('PASS learning UI: empty state, course progress, click menus, follow control, preview toggle');
     console.log('Screenshot: ' + screenshot);
-  } catch (error) {
-    console.error(error);
-    process.exitCode = 1;
-  } finally {
-    win.destroy();
-    app.exit(process.exitCode || 0);
-  }
 });

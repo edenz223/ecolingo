@@ -3,14 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const vm = require('node:vm');
-const esbuild = require('esbuild');
+const { loadTs } = require('./helpers/load-ts.cjs');
 
-const raw = fs.readFileSync(path.join(__dirname, '../src-electron/fileSystem.ts'), 'utf8');
-const source = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
-const scope = { require, TextDecoder, exports: {}, module: { exports: {} } };
-vm.runInNewContext(source, scope);
-const { FileProcessor } = scope.module.exports;
+const { FileProcessor } = loadTs('src-electron/fileSystem.ts', { require, TextDecoder });
 
 test('folders pair audio with subtitles in natural order and ignore unrelated entries', () => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ecolingo-folder-'));

@@ -1,24 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const vm = require('node:vm');
-const path = require('node:path');
-const root = path.join(__dirname, '..');
-const esbuild = require('esbuild');
+const { loadTs, stripModule } = require('./helpers/load-ts.cjs');
 
-function loadTsModule(filePath) {
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const compiled = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
-  const mod = { exports: {} };
-  vm.runInNewContext(compiled, { exports: mod.exports, module: mod });
-  return mod.exports;
-}
-
-const detectorScope = loadTsModule(path.join(root, 'src/utils/voice-activity.ts'));
-const settingsScope = loadTsModule(path.join(root, 'src/utils/settings.ts'));
-const zenScope = loadTsModule(path.join(root, 'src/utils/zen-flow.ts'));
-const playbackOptionsScope = loadTsModule(path.join(root, 'src/utils/playback-options.ts'));
-const practiceStatusScope = loadTsModule(path.join(root, 'src/utils/practice-status.ts'));
+const detectorScope = loadTs('src/utils/voice-activity.ts');
+const settingsScope = loadTs('src/utils/settings.ts');
+const zenScope = loadTs('src/utils/zen-flow.ts');
+const playbackOptionsScope = loadTs('src/utils/playback-options.ts');
+const practiceStatusScope = loadTs('src/utils/practice-status.ts');
 
 function signal(options) {
   let now = 0;
@@ -108,17 +97,11 @@ test('a delayed timer does not invent sustained speech', () => {
   assert.equal(detect(0, 8000).reason, 'no-speech');
 });
 
-const stripModule = (filePath) =>
-  esbuild.transformSync(fs.readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'esm' }).code
-    .replace(/^import .*;\r?\n/gm, '')
-    .replace(/^export (\{.*\}|default |const |class |function |let |var )/gm, '$1')
-    .replace(/^export \{[\s\S]*?\};?\r?\n/gm, '');
-
-const playerCode = stripModule(path.join(root, 'src/modules/player.ts'));
-const recorderCode = stripModule(path.join(root, 'src/modules/recorder.ts'));
-const zenCode = stripModule(path.join(root, 'src/modules/zen.ts'));
-const compareCode = stripModule(path.join(root, 'src/modules/compare.ts'));
-const sessionCode = stripModule(path.join(root, 'src/modules/learning-session.ts'));
+const playerCode = stripModule('src/modules/player.ts');
+const recorderCode = stripModule('src/modules/recorder.ts');
+const zenCode = stripModule('src/modules/zen.ts');
+const compareCode = stripModule('src/modules/compare.ts');
+const sessionCode = stripModule('src/modules/learning-session.ts');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function setup({ deferredAccess = false, denied = false, saveFailure = false } = {}) {
   let access;
@@ -217,7 +200,7 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
     finishRead: () => readPreview({ bytes: new Uint8Array([1]), mime: 'audio/webm' }),
     emit: (reason) => update({ state: 'silence', reason }),
     grant: () => access(stream),
-    cleanup() { h.closeRecordingError(); h.player.stopCurrentPlayback(); h.releaseRecordingResources(); },
+    cleanup() { h.recorder.closeRecordingError(); h.player.stopCurrentPlayback(); h.recorder.releaseRecordingResources(); },
   };
 }
 
@@ -234,7 +217,7 @@ test('reference boundary starts independent recording; stop event saves then adv
     h.emit('silence');
     assert.equal(h.sound.playing(), false); // Wait for MediaRecorder's final data.
     await flush();
-    await Promise.all([...h.pendingSaves]);
+    await Promise.all([...h.recorder.pendingSaves]);
     assert.equal(h.saves.length, 1);
     assert.equal(h.player.currentSentence.value, h.sentences[1]);
     assert.equal(h.sound.playing(), true);
@@ -256,19 +239,19 @@ test('manual browsing pauses scroll following without blocking sentence advancem
 test('preview toggles off during loading and playback, and clears after ending', async () => {
   const h = setup();
   try {
-    const pending = h.previewRecording({ id: 'take' });
+    const pending = h.recorder.previewRecording({ id: 'take' });
     assert.equal(h.sound.playing(), false);
-    await h.previewRecording({ id: 'take' });
+    await h.recorder.previewRecording({ id: 'take' });
     h.finishRead(); await pending;
     assert.equal(h.previews.length, 0);
     assert.equal(h.previewClipId.value, null);
-    const playing = h.previewRecording({ id: 'take' });
+    const playing = h.recorder.previewRecording({ id: 'take' });
     h.finishRead(); await playing;
     assert.equal(h.previews[0].playing, true);
-    await h.previewRecording({ id: 'take' });
+    await h.recorder.previewRecording({ id: 'take' });
     assert.equal(h.previews[0].playing, false);
     assert.equal(h.previewClipId.value, null);
-    const again = h.previewRecording({ id: 'take' });
+    const again = h.recorder.previewRecording({ id: 'take' });
     h.finishRead(); await again;
     h.previews[1].onended();
     assert.equal(h.previewClipId.value, null);
@@ -286,7 +269,7 @@ test('recording deadline is always ten seconds', async () => {
       h.emit('limit');
       assert.equal(h.sound.playing(), false);
       await flush();
-      await Promise.all([...h.pendingSaves]);
+      await Promise.all([...h.recorder.pendingSaves]);
       assert.equal(h.saves.length, 1);
       assert.equal(h.player.currentSentence.value, h.sentences[1]);
     } finally { h.cleanup(); }
@@ -319,7 +302,7 @@ test('no speech pauses at current sentence without saving an empty take', async 
     assert.equal(h.sound.playing(), false);
     assert.equal(h.sound.at, 0);
     assert.equal(h.saves.length, 0);
-    assert.equal(h.recordingError.value, '');
+    assert.equal(h.recorder.recordingError.value, '');
     assert.equal(h.noSpeechSentence.value, h.sentences[0].start);
   } finally { h.cleanup(); }
 });
@@ -330,15 +313,15 @@ test('no-speech notice clears after two seconds without a popup or resuming play
   try {
     h.player.step(); newer.player.step(); await flush();
     h.emit('no-speech'); newer.emit('no-speech'); await flush();
-    assert.equal(h.recordingError.value, '');
+    assert.equal(h.recorder.recordingError.value, '');
     assert.equal(h.noSpeechSentence.value, h.sentences[0].start);
-    newer.recordingError.value = '麦克风已断开';
+    newer.recorder.recordingError.value = '麦克风已断开';
     await new Promise((resolve) => setTimeout(resolve, 2100));
-    assert.equal(h.recordingError.value, '');
+    assert.equal(h.recorder.recordingError.value, '');
     assert.equal(h.sound.playing(), false);
     assert.equal(h.saves.length, 0);
     assert.equal(h.noSpeechSentence.value, null);
-    assert.equal(newer.recordingError.value, '麦克风已断开');
+    assert.equal(newer.recorder.recordingError.value, '麦克风已断开');
   } finally { h.cleanup(); newer.cleanup(); }
 });
 
@@ -372,7 +355,7 @@ test('permission denial leaves the current sentence paused and retryable', async
     assert.equal(h.player.isShadowing.value, false);
     assert.equal(h.isRecording.value, false);
     assert.equal(h.sound.at, 0);
-    assert.match(h.recordingError.value, /Permission denied/);
+    assert.match(h.recorder.recordingError.value, /Permission denied/);
   } finally { h.cleanup(); }
 });
 
@@ -423,7 +406,7 @@ test('Zen discards first take, saves second, replays and advances only on playba
     assert.equal(h.zenPhase.value, 'second');
     h.emit('silence');
     await flush();
-    await Promise.all([...h.pendingSaves]);
+    await Promise.all([...h.recorder.pendingSaves]);
     await flush();
     assert.equal(h.saves.length, 1);
     assert.equal(h.zenPhase.value, 'preview');
@@ -542,7 +525,7 @@ async function reachZenPreview(h) {
   await flush();
   h.emit('silence');
   await flush();
-  await Promise.all([...h.pendingSaves]);
+  await Promise.all([...h.recorder.pendingSaves]);
   await flush();
 }
 
@@ -683,7 +666,7 @@ test('Zen playback failure pauses and preserves the saved second take', async ()
     h.previews[0].onerror();
     assert.equal(h.zenPhase.value, 'idle');
     assert.equal(h.saves.length, 1);
-    assert.ok(h.recordingError.value);
+    assert.ok(h.recorder.recordingError.value);
   } finally { h.cleanup(); }
 });
 
@@ -702,7 +685,7 @@ test('Zen save failure pauses before replay and never advances', async () => {
     await flush();
     await flush();
     assert.equal(h.zenPhase.value, 'idle');
-    assert.match(h.recordingError.value, /disk full/);
+    assert.match(h.recorder.recordingError.value, /disk full/);
     assert.equal(h.previews.length, 0);
     assert.equal(h.player.currentSentence.value, h.sentences[0]);
   } finally { h.cleanup(); }
@@ -783,7 +766,7 @@ test('shadowing is the parent switch: enabling needs no microphone and disabling
     h.toggleShadowingMode();
     assert.equal(h.shadowingMode.value, true);
     assert.equal(h.zenMode.value, false);
-    assert.equal(h.recordingError.value, '');
+    assert.equal(h.recorder.recordingError.value, '');
     h.toggleZenMode();
     assert.equal(h.zenMode.value, true);
     h.toggleShadowingMode();
@@ -830,5 +813,31 @@ test('Zen list changes lessons only after the final replay ends', async () => {
     await flush();
     assert.equal(advances, 1);
     assert.equal(h.zenPhase.value, 'idle');
+  } finally { h.cleanup(); }
+});
+
+test('sentence stepping stays in range and lesson stepping wraps around', () => {
+  const h = setup();
+  try {
+    const clicked = [];
+    h.player.clickSentence = (sentence) => clicked.push(sentence.text);
+    h.previousSentence();
+    h.nextSentence();
+    h.player.currentSentence.value = h.sentences[1];
+    h.nextSentence();
+    h.previousSentence();
+    assert.deepEqual(clicked, ['two', 'one']);
+
+    const opened = [];
+    h.player.playLesson = (lesson) => opened.push(lesson.name);
+    h.lessons.value = [{ name: 'a' }, { name: 'b' }, { name: 'c' }];
+    h.currentLessonIndex.value = -1;
+    h.previousLesson();
+    h.nextLesson();
+    h.currentLessonIndex.value = -1;
+    h.nextLesson();
+    h.previousLesson();
+    assert.deepEqual(opened, ['c', 'a', 'a', 'c']);
+    assert.equal(h.currentLessonIndex.value, 2);
   } finally { h.cleanup(); }
 });

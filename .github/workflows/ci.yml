@@ -29,4 +29,6 @@ jobs:
       - run: yarn build
       # Ubuntu 24.04 blocks the unprivileged user namespaces Chromium's sandbox needs.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - run: xvfb-run --auto-servernum yarn test:smoke
+      # The smoke tests maximize the window, which needs a window manager and a screen wider than 1100 px.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fluxbox
+      - run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" bash -c 'fluxbox >/dev/null 2>&1 & sleep 2; yarn test:smoke'

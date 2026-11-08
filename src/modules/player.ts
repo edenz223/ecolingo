@@ -73,7 +73,8 @@ export class Player {
     Object.assign(this.callbacks, callbacks);
   }
 
-  async playLesson(lesson: Lesson, onReady?: () => void) {
+  // startAt opens the lesson at the sentence beginning at that time (first sentence otherwise).
+  async playLesson(lesson: Lesson, onReady?: () => void, startAt?: number) {
     this.releaseLesson();
     this.callbacks.onLoadingChange?.(true);
     const sessionId = this.loadSessionId;
@@ -96,7 +97,7 @@ export class Player {
       if (sessionId !== this.loadSessionId) return;
       const sentences = lyricsPath.endsWith('.srt') ? parseSRT(content) : parseLRC(content);
       if (!sentences.length) throw new Error('字幕中没有可用的句子，请检查字幕文件。');
-      this.initializeSound(audioFilePath, sentences, sessionId, onReady);
+      this.initializeSound(audioFilePath, sentences, sessionId, onReady, startAt);
     } catch (error: any) {
       if (sessionId === this.loadSessionId) {
         this.callbacks.onLoadingChange?.(false);
@@ -129,7 +130,8 @@ export class Player {
     audioFilePath: string,
     sentences: Sentence[],
     sessionId: number,
-    onReady?: () => void
+    onReady?: () => void,
+    startAt?: number
   ) {
     const sound = new Howl({
       preload: false,
@@ -146,7 +148,10 @@ export class Player {
         this.pendingSound = null;
         this.sound.value = sound;
         this.parsedSentences.value = sentences;
-        this.clickSentence(sentences[0]);
+        // Start at the target directly: a second play() right after this one would
+        // interrupt the HTML5 audio element and surface as a playerror.
+        const first = sentences.find(sentence => sentence.start === startAt) || sentences[0];
+        this.clickSentence(first);
         onReady?.();
       },
       onloaderror: (id: unknown, error: unknown) => {

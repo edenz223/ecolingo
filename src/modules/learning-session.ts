@@ -312,12 +312,14 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       const lesson = lessons.value[index];
       currentLessonIndex.value = index;
       loadedLessonKey.value = null;
-      player.playLesson(lesson, () => {
-        loadedLessonKey.value = lessonKey(lesson);
-        const target = player.parsedSentences.value.find(sentence => sentence.start === startAt);
-        if (target && target !== player.currentSentence.value) void player.clickSentence(target);
-        if (continuePlayback && zenMode.value) zen.startZenSentence();
-      });
+      player.playLesson(
+        lesson,
+        () => {
+          loadedLessonKey.value = lessonKey(lesson);
+          if (continuePlayback && zenMode.value) zen.startZenSentence();
+        },
+        startAt
+      );
     }
   }
 

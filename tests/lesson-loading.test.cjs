@@ -31,7 +31,7 @@ function setup() {
     pause() { this.active = false; }
     volume() {}
     seek(value) { if (value !== undefined) this.position = value; return this.position || 0; }
-    play() { this.active = true; this.options.onplay(); }
+    play() { this.active = true; this.plays = (this.plays || 0) + 1; this.options.onplay(); }
   }
   const context = vm.createContext({
     ref: value => ({ value }), Howl, console,
@@ -65,8 +65,36 @@ function setup() {
   `, context);
   const lesson = name => ({ name, lyrics: { path: '/lessons', name: `${name}.lrc` }, audio: { path: '/lessons', name: `${name}.mp3` } });
   const resolve = (name) => reads.get(`/lessons/${name}.lrc`).resolve(name);
-  return { player, sounds, frames, lesson, resolve, shadowingMode, recordingEvents };
+  return { player, sounds, frames, lesson, resolve, shadowingMode, recordingEvents, context };
 }
+
+test('resuming at a saved sentence starts there with a single play call', async () => {
+  const { player, sounds, lesson, resolve, context } = setup();
+  context.parseLRC = () => [
+    { start: 0, end: 5, text: 'first' },
+    { start: 5, end: 9, text: 'saved' },
+    { start: 9, text: 'last' },
+  ];
+  let ready = 0;
+  const pending = player.playLesson(lesson('A'), () => ready++, 5);
+  resolve('A'); await pending;
+  sounds[0].options.onload();
+  assert.equal(ready, 1);
+  assert.equal(player.currentSentence.value.text, 'saved');
+  assert.equal(sounds[0].position, 5);
+  // A second play() right after the first interrupts HTML5 audio and raises playerror.
+  assert.equal(sounds[0].plays, 1);
+});
+
+test('an unknown resume time falls back to the first sentence', async () => {
+  const { player, sounds, lesson, resolve, context } = setup();
+  context.parseLRC = () => [{ start: 0, end: 5, text: 'first' }, { start: 5, text: 'second' }];
+  const pending = player.playLesson(lesson('A'), undefined, 3);
+  resolve('A'); await pending;
+  sounds[0].options.onload();
+  assert.equal(player.currentSentence.value.text, 'first');
+  assert.equal(sounds[0].plays, 1);
+});
 
 test('late transcript cannot replace the latest lesson', async () => {
   const { player, sounds, lesson, resolve } = setup();

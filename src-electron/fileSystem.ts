@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import jschardet from 'jschardet';
+import type { LessonFile } from '../src/types/recording';
 
 export interface ProcessedLessonsResult {
   completeLessons: any[];
@@ -9,7 +10,7 @@ export interface ProcessedLessonsResult {
 
 abstract class FileStrategy {
   abstract isMatch(file: fs.Dirent): boolean;
-  abstract process(lesson: Record<string, any>, file: fs.Dirent): void;
+  abstract process(lesson: Record<string, any>, file: LessonFile): void;
 }
 
 class AudioFileStrategy extends FileStrategy {
@@ -18,7 +19,7 @@ class AudioFileStrategy extends FileStrategy {
     return audioExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
   }
 
-  process(lesson: Record<string, any>, file: fs.Dirent): void {
+  process(lesson: Record<string, any>, file: LessonFile): void {
     lesson.audio = file;
   }
 }
@@ -28,7 +29,7 @@ class LyricsFileStrategy extends FileStrategy {
     return file.name.endsWith('.lrc') || file.name.endsWith('.srt');
   }
 
-  process(lesson: Record<string, any>, file: fs.Dirent): void {
+  process(lesson: Record<string, any>, file: LessonFile): void {
     lesson.lyrics = file;
   }
 }
@@ -41,14 +42,17 @@ export class FileProcessor {
   }
 
   processFolder(folderPath: string): ProcessedLessonsResult {
-    const files = fs.readdirSync(folderPath, { withFileTypes: true });
-    files
+    // Natural order so "2" sorts before "10"; folders and unrelated files are ignored.
+    const files = fs
+      .readdirSync(folderPath, { withFileTypes: true })
       .filter((file) => file.isFile())
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     const lessonMap = new Map<string, Record<string, any>>();
 
     for (const file of files) {
+      const strategy = this.strategies.find((item) => item.isMatch(file));
+      if (!strategy) continue;
       const fileName = path.parse(file.name).name;
       let lesson = lessonMap.get(fileName);
 
@@ -56,13 +60,7 @@ export class FileProcessor {
         lesson = { name: fileName };
         lessonMap.set(fileName, lesson);
       }
-
-      for (const strategy of this.strategies) {
-        if (strategy.isMatch(file)) {
-          strategy.process(lesson, file);
-          break;
-        }
-      }
+      strategy.process(lesson, { name: file.name, path: folderPath });
     }
 
     const incompleteLessons: string[] = [];

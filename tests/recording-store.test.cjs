@@ -17,7 +17,7 @@ const scope = {
   module: { exports: {} }
 };
 vm.runInNewContext(source, scope);
-const { RecordingStore, lessonIdentity } = scope.module.exports;
+const { RecordingStore, lessonIdentity, createLessonIdentityCache } = scope.module.exports;
 
 
 test('durable recordings, isolated lessons, validation and failed-save rollback', async () => {
@@ -77,4 +77,41 @@ test('lesson identity survives a folder move and separates changed content', asy
     fs.appendFileSync(path.join(moved, lesson.audio.name), 'changed');
     assert.notEqual(await lessonIdentity(lesson), before);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('sentence counts include each recorded sentence once per lesson', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ecolingo-count-'));
+  try {
+    const store = await RecordingStore.open(root);
+    const meta = { lessonId: 'c'.repeat(64), lessonName: 'L', start: 1, end: 2, text: 'a', mime: 'audio/webm' };
+    store.save(meta, Buffer.from('one'));
+    store.save(meta, Buffer.from('retake'));
+    store.save({ ...meta, start: 3, end: 4 }, Buffer.from('two'));
+    store.save({ ...meta, lessonId: 'd'.repeat(64) }, Buffer.from('other'));
+    assert.equal(store.countSentences(meta.lessonId), 2);
+    assert.equal(store.countSentences('e'.repeat(64)), 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('identity cache reuses hashes until a lesson file changes', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ecolingo-identity-'));
+  try {
+    fs.writeFileSync(path.join(folder, 'a.mp3'), 'audio');
+    fs.writeFileSync(path.join(folder, 'a.lrc'), '[00:00.00]hi');
+    const lesson = { name: 'a', audio: { path: folder, name: 'a.mp3' }, lyrics: { path: folder, name: 'a.lrc' } };
+    let calls = 0;
+    const identify = createLessonIdentityCache(async (item) => { calls++; return lessonIdentity(item); });
+    const first = await identify(lesson);
+    assert.equal(await identify(lesson), first);
+    assert.equal(calls, 1);
+    fs.writeFileSync(path.join(folder, 'a.lrc'), '[00:00.00]changed subtitles');
+    const changed = await identify(lesson);
+    assert.equal(calls, 2);
+    assert.notEqual(changed, first);
+    assert.equal(changed, await lessonIdentity(lesson));
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
 });

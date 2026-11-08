@@ -1,13 +1,23 @@
-import type { UserSettings, PracticeMethod, LoopMode } from '../types/settings';
+import type {
+  UserSettings,
+  PracticeMethod,
+  LoopMode,
+  ResumePoint,
+  ThemePreference,
+  SubtitleSize,
+} from '../types/settings';
 
 const defaults: UserSettings = {
   playbackRate: 1,
   shadowing: false,
   loopMode: 'off',
-  repeatCount: 1,
+  repeatCount: 0,
   drawerOpen: true,
   zenFirstAttempt: true,
   practiceMethod: 'listen',
+  resume: null,
+  theme: 'system',
+  subtitleSize: 'medium',
 };
 const storageKey = 'ecolingo.settings.v1';
 
@@ -28,14 +38,37 @@ export function normalizeSettings(value: unknown): UserSettings {
   } else if (obj.loopMode === undefined && obj.repeatOne === true) {
     settings.loopMode = 'one';
   }
-  if (typeof obj.repeatCount === 'number' && Number.isInteger(obj.repeatCount) && obj.repeatCount >= 1 && obj.repeatCount <= 99) {
+  if (typeof obj.repeatCount === 'number' && Number.isInteger(obj.repeatCount) && obj.repeatCount >= 0 && obj.repeatCount <= 99) {
     settings.repeatCount = obj.repeatCount;
+  }
+  settings.resume = normalizeResumePoint(obj.resume);
+  if (['system', 'light', 'dark'].includes(obj.theme as string)) {
+    settings.theme = obj.theme as ThemePreference;
+  }
+  if (['small', 'medium', 'large'].includes(obj.subtitleSize as string)) {
+    settings.subtitleSize = obj.subtitleSize as SubtitleSize;
   }
   const rate = obj.playbackRate;
   if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0.1 && rate <= 4) {
     settings.playbackRate = rate;
   }
   return settings;
+}
+
+function normalizeResumePoint(value: unknown): ResumePoint | null {
+  if (!value || typeof value !== 'object') return null;
+  const { lessonKey, sentenceStart, sentenceIndex } = value as Record<string, unknown>;
+  if (
+    typeof lessonKey !== 'string' ||
+    !lessonKey ||
+    typeof sentenceStart !== 'number' ||
+    !Number.isFinite(sentenceStart) ||
+    sentenceStart < 0 ||
+    !Number.isInteger(sentenceIndex) ||
+    (sentenceIndex as number) < 0
+  )
+    return null;
+  return { lessonKey, sentenceStart, sentenceIndex: sentenceIndex as number };
 }
 
 export function loadSettings(): UserSettings {

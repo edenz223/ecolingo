@@ -3,6 +3,7 @@ import type { PracticeMethod } from '../types/settings';
 import type { Sentence } from '../types/subtitles';
 import type { RecordingMetadata } from '../types/recording';
 import { createZenCompletion } from '../utils/zen-flow';
+import type { ZenPhase } from '../utils/practice-status';
 import type { Player } from './player';
 import type { RecorderManager } from './recorder';
 
@@ -16,7 +17,7 @@ export class ZenCoordinator {
   practiceMethod: Ref<PracticeMethod>;
   zenMode: Ref<boolean>;
   zenFirstAttempt: Ref<boolean>;
-  zenPhase: Ref<'idle' | 'first' | 'reference' | 'second' | 'preview'>;
+  zenPhase: Ref<ZenPhase>;
   zenSession: number;
   completeZenRecording: (completion: any, meta: RecordingMetadata, blob: Blob) => void;
 

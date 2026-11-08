@@ -17,7 +17,11 @@ export interface PlayerCallbacks {
   onReleaseLesson?: () => void;
   onTogglePlay?: () => void;
   isZenReferencePlaying?: () => boolean;
-  handleZenClick?: (sentence: Sentence, forcePlay: boolean, wasPlayingZenReference: boolean) => boolean;
+  handleZenClick?: (
+    sentence: Sentence,
+    forcePlay: boolean,
+    wasPlayingZenReference: boolean
+  ) => boolean;
   stopPreview?: () => void;
 }
 
@@ -43,6 +47,8 @@ export class Player {
   completedPasses = 0;
   isShadowing: Ref<boolean>;
   playbackRate: Ref<number>;
+  // Howler's playing() is not reactive; bumping this lets views re-read it.
+  playbackRevision: Ref<number>;
   callbacks: PlayerCallbacks;
 
   constructor(options: PlayerOptions = {}) {
@@ -59,6 +65,7 @@ export class Player {
     this.repeatCount = options.repeatCount || ref(1);
     this.isShadowing = ref(false);
     this.playbackRate = options.playbackRate || ref(1);
+    this.playbackRevision = ref(0);
     this.callbacks = options.callbacks || {};
   }
 
@@ -66,7 +73,8 @@ export class Player {
     Object.assign(this.callbacks, callbacks);
   }
 
-  async playLesson(lesson: Lesson, onReady?: () => void) {
+  // startAt opens the lesson at the sentence beginning at that time (first sentence otherwise).
+  async playLesson(lesson: Lesson, onReady?: () => void, startAt?: number) {
     this.releaseLesson();
     this.callbacks.onLoadingChange?.(true);
     const sessionId = this.loadSessionId;
@@ -87,11 +95,9 @@ export class Player {
       if (!readFn) throw new Error('无法读取字幕文件：缺少 readTextFile 接口');
       const content = await readFn(lyricsPath);
       if (sessionId !== this.loadSessionId) return;
-      const sentences = lyricsPath.endsWith('.srt')
-        ? parseSRT(content)
-        : parseLRC(content);
+      const sentences = lyricsPath.endsWith('.srt') ? parseSRT(content) : parseLRC(content);
       if (!sentences.length) throw new Error('字幕中没有可用的句子，请检查字幕文件。');
-      this.initializeSound(audioFilePath, sentences, sessionId, onReady);
+      this.initializeSound(audioFilePath, sentences, sessionId, onReady, startAt);
     } catch (error: any) {
       if (sessionId === this.loadSessionId) {
         this.callbacks.onLoadingChange?.(false);
@@ -120,7 +126,13 @@ export class Player {
     this.isScrolling.value = false;
   }
 
-  initializeSound(audioFilePath: string, sentences: Sentence[], sessionId: number, onReady?: () => void) {
+  initializeSound(
+    audioFilePath: string,
+    sentences: Sentence[],
+    sessionId: number,
+    onReady?: () => void,
+    startAt?: number
+  ) {
     const sound = new Howl({
       preload: false,
       src: [audioFilePath],
@@ -136,7 +148,10 @@ export class Player {
         this.pendingSound = null;
         this.sound.value = sound;
         this.parsedSentences.value = sentences;
-        this.clickSentence(sentences[0]);
+        // Start at the target directly: a second play() right after this one would
+        // interrupt the HTML5 audio element and surface as a playerror.
+        const first = sentences.find(sentence => sentence.start === startAt) || sentences[0];
+        this.clickSentence(first);
         onReady?.();
       },
       onloaderror: (id: unknown, error: unknown) => {
@@ -148,7 +163,14 @@ export class Player {
         console.error('Error:', error);
       },
       onplay: () => {
+        this.playbackRevision.value++;
         if (sessionId === this.loadSessionId) this.scheduleStep();
+      },
+      onpause: () => {
+        this.playbackRevision.value++;
+      },
+      onstop: () => {
+        this.playbackRevision.value++;
       },
       onplayerror: () => {
         if (sessionId !== this.loadSessionId) return;
@@ -156,6 +178,7 @@ export class Player {
         this.callbacks.onError?.('原声无法播放，请检查音频文件后重试。');
       },
       onend: () => {
+        this.playbackRevision.value++;
         if (sessionId === this.loadSessionId) this.step(true);
       },
     });
@@ -222,7 +245,10 @@ export class Player {
     const sentence = this.currentSentence.value;
     if (!sentence) return undefined;
     this.completedPasses++;
-    if (this.loopMode.value === 'one' && this.completedPasses < this.repeatCount.value) return sentence;
+    // A repeat count of 0 loops the sentence until the user moves on.
+    const repeatsLeft =
+      this.repeatCount.value === 0 || this.completedPasses < this.repeatCount.value;
+    if (this.loopMode.value === 'one' && repeatsLeft) return sentence;
     this.completedPasses = 0;
     return this.getNextSentence();
   }
@@ -240,14 +266,15 @@ export class Player {
 
   setRepeatCount(value: number) {
     if (!Number.isFinite(value)) return;
-    this.repeatCount.value = Math.max(1, Math.min(99, Math.trunc(value)));
+    this.repeatCount.value = Math.max(0, Math.min(99, Math.trunc(value)));
     this.completedPasses = 0;
   }
 
   findCurrentSentence(currentTime: number): Sentence | undefined {
     const sentences = this.parsedSentences.value;
     const currentSentence = sentences.find((sentence, index) => {
-      const prevEnd = index > 0 && sentences[index - 1].end !== undefined ? sentences[index - 1].end! : 0;
+      const prevEnd =
+        index > 0 && sentences[index - 1].end !== undefined ? sentences[index - 1].end! : 0;
       const end = sentence.end !== undefined ? sentence.end : Infinity;
       return currentTime >= prevEnd && currentTime < end;
     });
@@ -263,7 +290,11 @@ export class Player {
     if (typeof document !== 'undefined') {
       const element = document.getElementById(sentence.start.toString());
       element?.scrollIntoView({
-        behavior: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        behavior:
+          typeof window !== 'undefined' &&
+          window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+            ? 'auto'
+            : 'smooth',
         block: 'center',
       });
     }

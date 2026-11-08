@@ -113,6 +113,16 @@ export class RecordingStore {
     );
   }
 
+  // Number of distinct sentences in a lesson that have at least one take.
+  countSentences(lessonId: string): number {
+    const [row] = rows<{ count: number }>(
+      this.db,
+      'SELECT COUNT(DISTINCT start) AS count FROM recordings WHERE lessonId = ?',
+      [lessonId]
+    );
+    return row?.count ?? 0;
+  }
+
   audioPath(clip: RecordingClip): string {
     validate(clip);
     const extensions: Record<string, string> = {
@@ -191,4 +201,26 @@ export async function lessonIdentity(lesson: Lesson): Promise<string> {
     }
   }
   return digest.digest('hex');
+}
+
+// Hashing whole audio files is slow, so reuse an identity until either file's
+// path, size or modification time changes.
+export function createLessonIdentityCache(identify = lessonIdentity) {
+  const cache = new Map<string, Promise<string>>();
+  return (lesson: Lesson): Promise<string> => {
+    const key = [lesson.audio, lesson.lyrics]
+      .map(file => {
+        const filePath = path.join(file.path, file.name);
+        const stat = fs.statSync(filePath);
+        return `${filePath}:${stat.size}:${stat.mtimeMs}`;
+      })
+      .join('|');
+    let identity = cache.get(key);
+    if (!identity) {
+      identity = identify(lesson);
+      cache.set(key, identity);
+      identity.catch(() => cache.delete(key));
+    }
+    return identity;
+  };
 }

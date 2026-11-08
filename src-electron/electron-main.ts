@@ -1,10 +1,20 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Menu,
+  MenuItemConstructorOptions,
+  nativeTheme,
+} from 'electron';
+import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { FileProcessor } from './fileSystem';
-import { RecordingStore, lessonIdentity } from './recording-store';
+import { RecordingStore, createLessonIdentityCache } from './recording-store';
 
 const fileProcessor = new FileProcessor();
+const lessonIdentity = createLessonIdentityCache();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -22,7 +32,22 @@ async function handleFolderOpen() {
   if (result.canceled) {
     return;
   }
-  const folderPath = result.filePaths[0];
+  loadLessonFolder(result.filePaths[0]);
+}
+
+// Dropped items arrive as paths; a dropped file opens the folder that contains it.
+function handleFolderPathOpen(_event: unknown, target: unknown): boolean {
+  if (typeof target !== 'string' || !path.isAbsolute(target)) return false;
+  try {
+    const folderPath = fs.statSync(target).isDirectory() ? target : path.dirname(target);
+    loadLessonFolder(folderPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadLessonFolder(folderPath: string) {
   const { completeLessons, incompleteLessons } = fileProcessor.processFolder(folderPath);
 
   if (incompleteLessons.length > 0 && mainWindow) {
@@ -44,6 +69,7 @@ function readTextFile(_event: any, filePath: string) {
 
 // 修改 ipcMain 处理程序
 ipcMain.handle('openFolder', handleFolderOpen);
+ipcMain.handle('openFolderPath', handleFolderPathOpen);
 ipcMain.handle('readTextFile', readTextFile);
 
 let recordingStorePromise: Promise<RecordingStore> | null = null;
@@ -63,6 +89,9 @@ ipcMain.handle('recordings:identity', (_event, lesson) => lessonIdentity(lesson)
 ipcMain.handle('recordings:list', async (_event, lessonId) =>
   (await getRecordingStore()).list(lessonId)
 );
+ipcMain.handle('recordings:count', async (_event, lesson) =>
+  (await getRecordingStore()).countSentences(await lessonIdentity(lesson))
+);
 ipcMain.handle('recordings:save', async (_event, meta, bytes) =>
   (await getRecordingStore()).save(meta, bytes)
 );
@@ -71,6 +100,35 @@ ipcMain.handle('window:setFocusMode', (_event, isFocus) => {
   if (!mainWindow) return;
   if (platform === 'darwin') {
     mainWindow.setWindowButtonVisibility(!isFocus);
+  }
+});
+
+// 外观: the renderer owns the preference; a copy here lets the next launch paint
+// the right background before the page loads.
+type ThemeSource = 'system' | 'light' | 'dark';
+const themeSources: ThemeSource[] = ['system', 'light', 'dark'];
+const appearanceFile = () => path.join(app.getPath('userData'), 'appearance.json');
+
+function readThemeSource(): ThemeSource {
+  try {
+    const { theme } = JSON.parse(fs.readFileSync(appearanceFile(), 'utf8'));
+    return themeSources.includes(theme) ? theme : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+// Matches --bg-base in src/css/app.scss.
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#1a1918' : '#ffffff');
+
+ipcMain.handle('window:setTheme', (_event, source: unknown) => {
+  if (!themeSources.includes(source as ThemeSource)) return;
+  if (nativeTheme.themeSource === source) return;
+  nativeTheme.themeSource = source as ThemeSource;
+  try {
+    fs.writeFileSync(appearanceFile(), JSON.stringify({ theme: source }));
+  } catch {
+    // Only the next launch's first frame depends on this copy.
   }
 });
 
@@ -125,7 +183,7 @@ function createWindow() {
     fullscreenable: true,
     thickFrame: true,
     useContentSize: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: windowBackground(),
     webPreferences: {
       // Keep the audio-clock checks running while the lesson window is minimized.
       backgroundThrottling: false,
@@ -171,7 +229,13 @@ if (!app.requestSingleInstanceLock()) {
     if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.focus();
   });
-  app.whenReady().then(createWindow);
+  app.whenReady().then(() => {
+    nativeTheme.themeSource = readThemeSource();
+    nativeTheme.on('updated', () => {
+      mainWindow?.setBackgroundColor(windowBackground());
+    });
+    createWindow();
+  });
 }
 
 app.on('window-all-closed', () => {

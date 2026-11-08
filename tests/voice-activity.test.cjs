@@ -17,6 +17,8 @@ function loadTsModule(filePath) {
 const detectorScope = loadTsModule(path.join(root, 'src/utils/voice-activity.ts'));
 const settingsScope = loadTsModule(path.join(root, 'src/utils/settings.ts'));
 const zenScope = loadTsModule(path.join(root, 'src/utils/zen-flow.ts'));
+const playbackOptionsScope = loadTsModule(path.join(root, 'src/utils/playback-options.ts'));
+const practiceStatusScope = loadTsModule(path.join(root, 'src/utils/practice-status.ts'));
 
 function signal(options) {
   let now = 0;
@@ -102,11 +104,8 @@ const stripModule = (filePath) =>
 const playerCode = stripModule(path.join(root, 'src/modules/player.ts'));
 const recorderCode = stripModule(path.join(root, 'src/modules/recorder.ts'));
 const zenCode = stripModule(path.join(root, 'src/modules/zen.ts'));
-
-const rawScript = fs.readFileSync(path.join(root, 'src/layouts/MainLayout.vue'), 'utf8')
-  .split(/<script setup.*?>/)[1].split('</script>')[0];
-const layout = esbuild.transformSync(rawScript, { loader: 'ts', format: 'esm' }).code
-  .replace(/^import .*;\r?\n/gm, '');
+const compareCode = stripModule(path.join(root, 'src/modules/compare.ts'));
+const sessionCode = stripModule(path.join(root, 'src/modules/learning-session.ts'));
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function setup({ deferredAccess = false, denied = false, saveFailure = false } = {}) {
   let access;
@@ -139,8 +138,10 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
     ready: async () => {}, start(fn, options) { update = fn; this.options = options; }, stop() {}, dispose() {},
   };
   const context = {
-    ref: require('vue').shallowRef, watch: require('vue').watch, onMounted() {}, onUnmounted() {},
+    ref: require('vue').shallowRef, computed: require('vue').computed, watch: require('vue').watch,
     loadSettings: settingsScope.loadSettings, saveSettings: settingsScope.saveSettings,
+    clampPlaybackRate: playbackOptionsScope.clampPlaybackRate,
+    derivePracticeStatus: practiceStatusScope.derivePracticeStatus,
     createVoiceMonitor: () => monitor,
     createZenCompletion: zenScope.createZenCompletion,
     navigator: { mediaDevices: { getUserMedia: () => denied
@@ -171,21 +172,19 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
       return setTimeout(callback, delay);
     },
     clearTimeout, URL,
-    document: { getElementById: () => ({ scrollIntoView() { scrolls++; } }) },
+    countScroll: () => { scrolls++; },
   };
   vm.createContext(context);
   vm.runInContext(playerCode, context);
   vm.runInContext(recorderCode, context);
   vm.runInContext(zenCode, context);
-  vm.runInContext(layout + `
-    globalThis.h = { player, shadowingMode, isRecording, recordingError, currentPlaybackRate,
-      startSentenceRecording, finishShadowing, toggleShadowingMode,
-      previewRecording, previewClipId, stopPreview, pauseFollowing, resumeFollowing,
-      closeRecordingError, noSpeechSentence, zenMode, zenPhase, zenFirstAttempt, selectPracticeMethod, focusMode,
-      toggleZenMode: () => selectPracticeMethod(zenMode.value ? 'listen' : 'attempt'),
-      toggleZenFirstAttempt: (value) => selectPracticeMethod(value ? 'attempt' : 'replay'),
-      releaseRecordingResources, pendingSaves };
-    recorder.activeLessonId = 'lesson';
+  vm.runInContext(compareCode, context);
+  vm.runInContext(sessionCode + `
+    const session = createLearningSession({ scrollToSentence: countScroll });
+    session.recorder.activeLessonId = 'lesson';
+    globalThis.h = { ...session,
+      toggleZenMode: () => session.selectPracticeMethod(session.zenMode.value ? 'listen' : 'attempt'),
+      toggleZenFirstAttempt: (value) => session.selectPracticeMethod(value ? 'attempt' : 'replay') };
   `, context);
   const { h } = context;
   const sentences = [{ start: 0, end: 1, text: 'one' }, { start: 1, end: 2, text: 'two' }];
@@ -312,7 +311,7 @@ test('no speech pauses at current sentence without saving an empty take', async 
   } finally { h.cleanup(); }
 });
 
-test('no-speech icon clears after one second without a popup or resuming playback', async () => {
+test('no-speech notice clears after two seconds without a popup or resuming playback', async () => {
   const h = setup();
   const newer = setup();
   try {
@@ -321,7 +320,7 @@ test('no-speech icon clears after one second without a popup or resuming playbac
     assert.equal(h.recordingError.value, '');
     assert.equal(h.noSpeechSentence.value, h.sentences[0].start);
     newer.recordingError.value = '麦克风已断开';
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await new Promise((resolve) => setTimeout(resolve, 2100));
     assert.equal(h.recordingError.value, '');
     assert.equal(h.sound.playing(), false);
     assert.equal(h.saves.length, 0);
@@ -533,6 +532,101 @@ async function reachZenPreview(h) {
   await Promise.all([...h.pendingSaves]);
   await flush();
 }
+
+test('A/B compare plays the original, pauses, replays the latest take, then rewinds', async () => {
+  const h = setup();
+  try {
+    h.recordings.value = { 0: { id: 'take', start: 0 } };
+    assert.equal(h.toggleCompare(), 'started');
+    assert.equal(h.comparePhase.value, 'original');
+    assert.equal(h.sound.playing(), true);
+    assert.equal(h.sound.at, 0);
+    h.sound.seek(1);
+    h.player.step();
+    assert.equal(h.sound.playing(), false);
+    assert.equal(h.comparePhase.value, 'gap');
+    assert.equal(h.isRecording.value, false); // Shadowing is on, but compare owns the boundary.
+    assert.ok(h.scheduledDelays.includes(500));
+    await flush();
+    assert.equal(h.comparePhase.value, 'recording');
+    assert.equal(h.previewClipId.value, 'take');
+    h.finishRead();
+    await flush();
+    h.previews[0].onended();
+    assert.equal(h.comparePhase.value, 'idle');
+    assert.equal(h.compareSentenceStart.value, null);
+    assert.equal(h.sound.at, 0);
+    assert.equal(h.sound.playing(), false);
+    assert.equal(h.player.currentSentence.value, h.sentences[0]);
+    assert.equal(h.saves.length, 0);
+  } finally { h.cleanup(); }
+});
+
+test('A/B compare stops on space, sentence navigation or playing a take alone', async () => {
+  const h = setup();
+  try {
+    h.recordings.value = { 0: { id: 'take', start: 0 } };
+    h.toggleCompare();
+    h.player.togglePlay();
+    assert.equal(h.comparePhase.value, 'idle');
+    assert.equal(h.sound.playing(), false);
+    assert.equal(h.sound.at, 0);
+
+    h.toggleCompare();
+    await h.player.clickSentence(h.sentences[1]);
+    assert.equal(h.comparePhase.value, 'idle');
+
+    h.toggleCompare(h.sentences[0]);
+    h.sound.seek(1);
+    h.player.step();
+    await flush();
+    assert.equal(h.comparePhase.value, 'recording');
+    h.playUserRecording(0);
+    assert.equal(h.comparePhase.value, 'idle');
+    assert.equal(h.previewClipId.value, 'take');
+    h.finishRead();
+    await flush();
+    assert.equal(h.previews.length, 1);
+    h.previews[0].onended();
+    assert.equal(h.comparePhase.value, 'idle');
+    assert.equal(h.sound.playing(), false);
+  } finally { h.cleanup(); }
+});
+
+test('A/B compare needs a saved take and toggles off for the same sentence', () => {
+  const h = setup();
+  try {
+    assert.equal(h.toggleCompare(), 'unavailable');
+    assert.equal(h.sound.playing(), true); // Unavailable compare leaves playback alone.
+    h.recordings.value = { 0: { id: 'take', start: 0 } };
+    assert.equal(h.toggleCompare(), 'started');
+    assert.equal(h.toggleCompare(), 'stopped');
+    assert.equal(h.comparePhase.value, 'idle');
+  } finally { h.cleanup(); }
+});
+
+test('practice status follows a listen-mode take and its no-speech retry hint', async () => {
+  const h = setup();
+  try {
+    h.player.step();
+    await flush();
+    assert.equal(h.practiceStatus.value.activeStep, 1);
+    assert.equal(h.practiceStatus.value.tone, 'recording');
+    h.emit('no-speech');
+    await flush();
+    assert.equal(h.practiceStatus.value.tone, 'warning');
+    assert.equal(h.practiceStatus.value.message, practiceStatusScope.noSpeechMessage);
+  } finally { h.cleanup(); }
+});
+
+test('practice status reaches the replay step of the attempt flow', async () => {
+  const h = setup();
+  try {
+    await reachZenPreview(h);
+    assert.deepEqual([...h.practiceStatus.value.steps], ['尝试', '听原声', '跟读', '回听']);
+    assert.equal(h.practiceStatus.value.activeStep, 3);
+  } finally { h.cleanup(); }
+});
 
 test('Zen repeats the complete cycle and stops after the final sentence replay', async () => {
   for (const repeat of [true, false]) {

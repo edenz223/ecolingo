@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Master app icon: white bars are the original audio, the offset blue bars its "shadow". -->
+  <rect width="512" height="512" rx="112" fill="#1c1917"/>
+  <rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#44403c" stroke-width="8"/>
+  <g fill="#2f9be8">
+    <rect x="110" y="216" width="44" height="120" rx="22"/>
+    <rect x="182" y="168" width="44" height="216" rx="22"/>
+    <rect x="254" y="128" width="44" height="296" rx="22"/>
+    <rect x="326" y="168" width="44" height="216" rx="22"/>
+    <rect x="398" y="216" width="44" height="120" rx="22"/>
+  </g>
+  <g fill="#ffffff">
+    <rect x="90" y="196" width="44" height="120" rx="22"/>
+    <rect x="162" y="148" width="44" height="216" rx="22"/>
+    <rect x="234" y="108" width="44" height="296" rx="22"/>
+    <rect x="306" y="148" width="44" height="216" rx="22"/>
+    <rect x="378" y="196" width="44" height="120" rx="22"/>
+  </g>
+</svg>

@@ -12,7 +12,6 @@ const base = {
   isRecording: false,
   isShadowing: false,
   isPlayingReference: false,
-  recordingStatus: '',
   noSpeech: false,
 };
 const status = overrides => derivePracticeStatus({ ...base, ...overrides });
@@ -25,12 +24,12 @@ test('listen method moves from reference to shadowing, including microphone warm
   assert.deepEqual([...status({}).steps], ['听原声', '跟读']);
   assert.equal(status({}).activeStep, -1);
   assert.equal(status({ isPlayingReference: true }).activeStep, 0);
-  const warmUp = status({ isShadowing: true, recordingStatus: '正在准备麦克风…' });
+  const warmUp = status({ isShadowing: true });
   assert.equal(warmUp.activeStep, 1);
   assert.equal(warmUp.tone, 'active');
-  const speaking = status({ isShadowing: true, isRecording: true, recordingStatus: '请开始跟读…' });
+  const speaking = status({ isShadowing: true, isRecording: true });
   assert.equal(speaking.tone, 'recording');
-  assert.equal(speaking.message, '请开始跟读…');
+  assert.equal(speaking.message, '');
 });
 
 test('Zen phases map onto replay and attempt steps', () => {
@@ -44,14 +43,11 @@ test('Zen phases map onto replay and attempt steps', () => {
   assert.deepEqual([...status({ practiceMethod: 'attempt' }).steps], ['尝试', '听原声', '跟读', '回听']);
 });
 
-test('saving and replay phases explain what is happening', () => {
-  assert.equal(status({ practiceMethod: 'replay', zenPhase: 'saving' }).message, '正在保存录音…');
-  assert.equal(status({ practiceMethod: 'replay', zenPhase: 'preview' }).message, '正在回听你的录音');
-});
-
-test('recorder status text wins over phase defaults', () => {
-  const limit = status({ practiceMethod: 'replay', zenPhase: 'saving', recordingStatus: '已达到 10 秒录音上限，正在保存…' });
-  assert.equal(limit.message, '已达到 10 秒录音上限，正在保存…');
+test('only warnings carry text; steps alone show saving and replay', () => {
+  const saving = status({ practiceMethod: 'replay', zenPhase: 'saving' });
+  assert.equal(saving.message, '');
+  assert.equal(saving.tone, 'active');
+  assert.equal(status({ practiceMethod: 'replay', zenPhase: 'preview' }).message, '');
 });
 
 test('A/B comparison shows its own steps even with shadowing off', () => {

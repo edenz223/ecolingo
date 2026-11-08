@@ -13,7 +13,6 @@ export interface PracticeStatusInput {
   // Playback is paused so the learner can speak, including microphone warm-up.
   isShadowing: boolean;
   isPlayingReference: boolean;
-  recordingStatus: string;
   noSpeech: boolean;
 }
 
@@ -22,6 +21,7 @@ export interface PracticeStatus {
   steps: readonly string[];
   // Index into steps, or -1 while waiting for the user to start.
   activeStep: number;
+  // Only warnings get text; the highlighted step and the record button carry the rest.
   message: string;
   tone: PracticeTone;
 }
@@ -40,11 +40,6 @@ const practiceSteps: Record<PracticeMethod, readonly string[]> = {
 const zenStepIndex: Record<'replay' | 'attempt', Partial<Record<ZenPhase, number>>> = {
   replay: { reference: 0, second: 1, saving: 1, preview: 2 },
   attempt: { first: 0, reference: 1, second: 2, saving: 2, preview: 3 },
-};
-
-const phaseMessages: Partial<Record<ZenPhase, string>> = {
-  saving: '正在保存录音…',
-  preview: '正在回听你的录音',
 };
 
 function activeStepFor(input: PracticeStatusInput): number {
@@ -69,11 +64,6 @@ export function derivePracticeStatus(input: PracticeStatusInput): PracticeStatus
     return { visible: true, steps, activeStep: -1, message: noSpeechMessage, tone: 'warning' };
   }
   const activeStep = activeStepFor(input);
-  const message = input.recordingStatus || phaseMessages[input.zenPhase] || '';
-  const tone: PracticeTone = input.isRecording
-    ? 'recording'
-    : activeStep >= 0 || message
-    ? 'active'
-    : 'idle';
-  return { visible: true, steps, activeStep, message, tone };
+  const tone: PracticeTone = input.isRecording ? 'recording' : activeStep >= 0 ? 'active' : 'idle';
+  return { visible: true, steps, activeStep, message: '', tone };
 }

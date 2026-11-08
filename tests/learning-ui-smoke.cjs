@@ -44,9 +44,9 @@ runUiSmoke({ prefix: 'ecolingo-ui-' }, async ({ win, temp, evaluate, waitFor, lo
       document.querySelector('#sentences').scrollTop += 240;
       document.querySelector('#sentences').dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 50 }))`);
     await waitFor(`document.querySelector('#sentences').scrollTop > ${scrollBefore}`);
-    await waitFor(`document.querySelector('.lesson-heading').textContent.includes('回到当前句')`);
+    await waitFor(`Boolean(document.querySelector('.lesson-heading .follow-btn'))`);
     await evaluate(`document.querySelector('.lesson-heading .follow-btn').click()`);
-    await waitFor(`!document.querySelector('.lesson-heading').textContent.includes('回到当前句')`);
+    await waitFor(`!document.querySelector('.lesson-heading .follow-btn')`);
     assert.equal(await evaluate(`document.querySelector('.q-toolbar').textContent.includes('录音记录') || document.querySelector('.q-toolbar').textContent.includes('更多')`), false);
     await waitFor(`Boolean(document.querySelector('[aria-label="播放此句最新录音"]'))`);
     await evaluate(`document.querySelector('[aria-label="播放此句最新录音"]').click()`);

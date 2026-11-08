@@ -20,6 +20,7 @@ export function createVoiceActivityDetector(
   let noise = 0.002;
   let speaking = false;
   let heardSpeech = false;
+  let level = 0;
 
   return (rms: number, now: number): VADResult => {
     // A delayed timer must not count unobserved audio as sustained speech.
@@ -27,6 +28,12 @@ export function createVoiceActivityDetector(
     previous = now;
     const threshold = Math.max(0.008, noise * (speaking ? 2 : 3));
     speaking = rms >= threshold;
+    // Loudness above the threshold on a log scale, so quiet speech moves the
+    // waveform a little and only loud syllables reach the top.
+    const target = speaking ? Math.min(1, 0.15 + Math.log(rms / threshold) / Math.log(40)) : 0;
+    // Rise fast and fall a little slower: syllables read as pulses, not flicker.
+    level += (target - level) * (target > level ? 0.6 : 0.3);
+    if (level < 0.01) level = 0;
     if (speaking) {
       voicedMs += elapsed;
       lastVoice = now;
@@ -45,6 +52,7 @@ export function createVoiceActivityDetector(
     return {
       reason,
       voiceActive: speaking,
+      level,
       state: heardSpeech ? (speaking ? 'speaking' : 'silence') : 'waiting',
     };
   };

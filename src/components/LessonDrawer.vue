@@ -3,10 +3,10 @@
     <div class="lesson-drawer">
       <div class="lesson-drawer__header">
         <div class="lesson-drawer__title">
-          <span class="lesson-drawer__label">课程列表</span>
           <span v-if="folderName" class="lesson-drawer__folder ellipsis" :title="folderName">{{
             folderName
           }}</span>
+          <span v-else class="lesson-drawer__label">课程列表</span>
         </div>
         <q-btn
           flat
@@ -44,8 +44,13 @@
           >
             <q-item-section>
               <q-item-label>{{ lesson.name }}</q-item-label>
-              <q-item-label v-if="recordedCounts[lessonKey(lesson)]" class="lesson-item__count"
-                >已录 {{ recordedCounts[lessonKey(lesson)] }} 句</q-item-label
+              <q-item-label
+                v-if="recordedCounts[lessonKey(lesson)]"
+                class="lesson-item__count"
+                :title="`已录 ${recordedCounts[lessonKey(lesson)]} 句`"
+                ><q-icon name="mic" size="14px" aria-hidden="true" />{{
+                  recordedCounts[lessonKey(lesson)]
+                }}</q-item-label
               >
             </q-item-section>
           </q-item>
@@ -196,7 +201,11 @@ watch(
 }
 
 .lesson-item .lesson-item__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   margin-top: 2px;
+  font-variant-numeric: tabular-nums;
   color: var(--ink-muted);
   font-size: var(--text-caption);
   font-weight: 400;

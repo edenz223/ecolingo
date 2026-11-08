@@ -46,6 +46,9 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: yarn build
+        env:
+          # electron-builder skips signing on pull requests; the macOS ad-hoc signature needs no secrets.
+          CSC_FOR_PULL_REQUEST: true
       - uses: actions/upload-artifact@v7
         with:
           name: EcoLingo-${{ runner.os }}

@@ -1,6 +1,5 @@
 <template>
-  <!-- The live region stays mounted so each new message is announced. -->
-  <div class="action-hud" role="status" aria-live="polite" aria-atomic="true">
+  <div class="action-hud">
     <Transition name="action-hud">
       <span v-if="message" class="action-hud__pill">{{ message }}</span>
     </Transition>

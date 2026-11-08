@@ -17,7 +17,7 @@ function session(storage) {
 test('all supported preferences survive a new session, including false values', () => {
   const values = new Map();
   const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
-  const expected = { playbackRate: 1.3, shadowing: true, loopMode: 'one', repeatCount: 1, drawerOpen: false, zenFirstAttempt: false, practiceMethod: 'replay' };
+  const expected = { playbackRate: 1.3, shadowing: true, loopMode: 'one', repeatCount: 1, drawerOpen: false, zenFirstAttempt: false, practiceMethod: 'replay', resume: { lessonKey: 'D:/课程/002 02.mp3', sentenceStart: 6.39, sentenceIndex: 3 } };
   session(storage).saveSettings(expected);
   assert.equal(JSON.stringify(session(storage).loadSettings()), JSON.stringify(expected));
 });
@@ -67,5 +67,20 @@ test('repeat count persists and rejects malformed stored values', () => {
   }
   for (const repeatCount of [-1, 100, 1.5, '3', null]) {
     assert.equal(session({ getItem: () => JSON.stringify({ repeatCount }) }).loadSettings().repeatCount, 0);
+  }
+});
+
+test('resume point keeps a valid position and drops malformed ones', () => {
+  const load = resume => session({ getItem: () => JSON.stringify({ resume }) }).loadSettings().resume;
+  assert.equal(session({ getItem: () => null }).loadSettings().resume, null);
+  assert.deepEqual({ ...load({ lessonKey: '/a/1.mp3', sentenceStart: 0, sentenceIndex: 0 }) }, { lessonKey: '/a/1.mp3', sentenceStart: 0, sentenceIndex: 0 });
+  for (const resume of [
+    null, 'x', { lessonKey: '', sentenceStart: 1, sentenceIndex: 0 },
+    { lessonKey: '/a', sentenceStart: -1, sentenceIndex: 0 },
+    { lessonKey: '/a', sentenceStart: 1, sentenceIndex: 1.5 },
+    { lessonKey: '/a', sentenceStart: Infinity, sentenceIndex: 0 },
+    { lessonKey: 7, sentenceStart: 1, sentenceIndex: 0 },
+  ]) {
+    assert.equal(load(resume), null, JSON.stringify(resume));
   }
 });

@@ -14,6 +14,7 @@ export interface KeyboardShortcutActions {
   nextSentence: () => void;
   previousLesson: () => void;
   nextLesson: () => void;
+  compareSentence: () => void;
   adjustPlaybackRate: (delta: number) => void;
   resetPlaybackRate: () => void;
   reload: () => void;
@@ -39,6 +40,7 @@ export function createKeyboardShortcuts(actions: KeyboardShortcutActions) {
     KeyA: actions.previousSentence,
     KeyQ: actions.previousLesson,
     KeyE: actions.nextLesson,
+    KeyB: actions.compareSentence,
     KeyC: () => actions.adjustPlaybackRate(playbackRateStep),
     KeyX: () => actions.adjustPlaybackRate(-playbackRateStep),
     KeyZ: actions.resetPlaybackRate,

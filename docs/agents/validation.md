@@ -8,18 +8,20 @@
 
 ## 按改动选择检查
 
-| 改动                            | 检查                                            |
-| ------------------------------- | ----------------------------------------------- |
-| 代码                            | `npm run lint`                                  |
-| 构建、主进程、preload 或依赖    | 另加 `npm run build`                            |
-| VAD 核心逻辑                    | `node --test tests/voice-activity.test.cjs`     |
-| 偏好设置逻辑                    | `node --test tests/settings.test.cjs`           |
-| 键盘快捷键分发                  | `node --test tests/keyboard-shortcuts.test.cjs` |
-| 练习状态推导                    | `node --test tests/practice-status.test.cjs`    |
-| 学习会话协调（跟读、Zen、回放） | `node --test tests/voice-activity.test.cjs`     |
-| 录音存储逻辑                    | `npm run test:recordings`                       |
-| 其他已有测试覆盖的核心逻辑      | 运行对应测试文件                                |
-| 纯文档或样式                    | 不运行无关测试                                  |
+| 改动                                      | 检查                                            |
+| ----------------------------------------- | ----------------------------------------------- |
+| 代码                                      | `npm run lint`                                  |
+| 构建、主进程、preload 或依赖              | 另加 `npm run build`                            |
+| VAD 核心逻辑                              | `node --test tests/voice-activity.test.cjs`     |
+| 偏好设置逻辑                              | `node --test tests/settings.test.cjs`           |
+| 键盘快捷键分发                            | `node --test tests/keyboard-shortcuts.test.cjs` |
+| 练习状态推导                              | `node --test tests/practice-status.test.cjs`    |
+| 课程键、筛选、继续上次                    | `node --test tests/lesson-library.test.cjs`     |
+| 文件夹扫描与配对                          | `node --test tests/file-processor.test.cjs`     |
+| 学习会话协调（跟读、Zen、回放、A/B 对比） | `node --test tests/voice-activity.test.cjs`     |
+| 录音存储逻辑                              | `npm run test:recordings`                       |
+| 其他已有测试覆盖的核心逻辑                | 运行对应测试文件                                |
+| 纯文档或样式                              | 不运行无关测试                                  |
 
 `npm test` 只是占位脚本，不能作为测试通过的依据。修复易复发 bug 时优先添加回归测试。
 

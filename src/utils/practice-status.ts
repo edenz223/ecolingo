@@ -1,4 +1,5 @@
 import type { PracticeMethod } from '../types/settings';
+import type { ComparePhase } from '../modules/compare';
 
 export type ZenPhase = 'idle' | 'first' | 'reference' | 'second' | 'saving' | 'preview';
 export type PracticeTone = 'idle' | 'active' | 'recording' | 'warning';
@@ -7,6 +8,7 @@ export interface PracticeStatusInput {
   shadowingMode: boolean;
   practiceMethod: PracticeMethod;
   zenPhase: ZenPhase;
+  comparePhase: ComparePhase;
   isRecording: boolean;
   // Playback is paused so the learner can speak, including microphone warm-up.
   isShadowing: boolean;
@@ -25,6 +27,8 @@ export interface PracticeStatus {
 }
 
 export const noSpeechMessage = '没听到声音，按空格重试';
+
+const compareSteps = ['原声', '我的录音'] as const;
 
 const practiceSteps: Record<PracticeMethod, readonly string[]> = {
   listen: ['听原声', '跟读'],
@@ -52,6 +56,11 @@ function activeStepFor(input: PracticeStatusInput): number {
 }
 
 export function derivePracticeStatus(input: PracticeStatusInput): PracticeStatus {
+  // An A/B comparison is shown whether or not shadowing is on.
+  if (input.comparePhase !== 'idle') {
+    const activeStep = input.comparePhase === 'original' ? 0 : 1;
+    return { visible: true, steps: compareSteps, activeStep, message: '', tone: 'active' };
+  }
   const steps = practiceSteps[input.practiceMethod];
   if (!input.shadowingMode) {
     return { visible: false, steps, activeStep: -1, message: '', tone: 'idle' };
@@ -67,11 +76,4 @@ export function derivePracticeStatus(input: PracticeStatusInput): PracticeStatus
     ? 'active'
     : 'idle';
   return { visible: true, steps, activeStep, message, tone };
-}
-
-// Short phrase for screen readers: the current step plus any detail.
-export function describePracticeStatus(status: PracticeStatus): string {
-  if (!status.visible) return '';
-  const step = status.steps[status.activeStep];
-  return [step, status.message].filter(Boolean).join('：');
 }

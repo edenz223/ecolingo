@@ -1,9 +1,11 @@
 <template>
   <div
     id="sentences"
+    ref="panel"
     class="q-pa-md sentences-panel"
     @wheel.passive="emit('browse')"
     @touchmove.passive="emit('browse')"
+    @keydown="moveFocus"
   >
     <q-list>
       <q-item
@@ -22,9 +24,31 @@
         <q-item-section>
           <q-item-label :id="s.start.toString()">{{ s.text }}</q-item-label>
         </q-item-section>
-        <q-item-section side class="sentence-actions">
+        <q-item-section
+          v-if="recordings[s.start] && !isRecording && noSpeechSentence !== s.start"
+          side
+          class="sentence-actions"
+        >
           <q-btn
-            v-if="recordings[s.start] && !isRecording && noSpeechSentence !== s.start"
+            round
+            dense
+            flat
+            class="sentence-recording-button"
+            :icon="compareSentenceStart === s.start ? 'stop_circle' : 'compare_arrows'"
+            :color="compareSentenceStart === s.start ? 'primary' : undefined"
+            :aria-label="compareSentenceStart === s.start ? '停止对比' : '对比原声与我的录音'"
+            @click.stop="emit('compare', s)"
+          >
+            <q-tooltip
+              :delay="400"
+              :hide-delay="0"
+              :transition-duration="100"
+              class="small-tooltip"
+              >{{ compareSentenceStart === s.start ? '停止对比' : '对比原声与录音 · B' }}</q-tooltip
+            >
+          </q-btn>
+          <q-btn
+            v-if="compareSentenceStart !== s.start"
             round
             dense
             flat
@@ -45,12 +69,14 @@
             >
           </q-btn>
         </q-item-section>
+        <q-item-section v-else side class="sentence-actions" />
       </q-item>
     </q-list>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 import type { RecordingClip } from '../types/recording';
 import type { Sentence } from '../types/subtitles';
 
@@ -61,14 +87,32 @@ defineProps<{
   previewClipId: string | null;
   isRecording: boolean;
   noSpeechSentence: number | null;
+  // Sentence whose original/take comparison is running, if any.
+  compareSentenceStart: number | null;
 }>();
 const emit = defineEmits<{
   (event: 'sentence-click', sentence: Sentence, domEvent: MouseEvent): void;
   (event: 'sentence-dblclick', sentence: Sentence): void;
   (event: 'play-recording', start: number): void;
+  (event: 'compare', sentence: Sentence): void;
   // The user scrolled the list by hand, so stop following playback.
   (event: 'browse'): void;
 }>();
+
+const panel = ref<HTMLElement | null>(null);
+
+// Up/Down move focus between sentences; Enter on a focused sentence plays it.
+function moveFocus(event: KeyboardEvent) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  const item = (event.target as HTMLElement | null)?.closest<HTMLElement>('.sentence-item');
+  if (!item || !panel.value) return;
+  const items = Array.from(panel.value.querySelectorAll<HTMLElement>('.sentence-item'));
+  const next = items[items.indexOf(item) + (event.key === 'ArrowDown' ? 1 : -1)];
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
+  next.scrollIntoView({ block: 'nearest' });
+}
 </script>
 
 <style>
@@ -136,12 +180,14 @@ const emit = defineEmits<{
   outline-offset: var(--focus-offset);
 }
 
-.sentence-actions {
+/* Fixed width so rows with and without takes wrap text the same way. */
+.sentence-item .sentence-actions {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  flex: 0 0 44px;
-  width: 44px;
+  justify-content: flex-end;
+  flex: 0 0 84px;
+  width: 84px;
   min-height: 36px;
   padding-left: 8px;
   gap: 4px;

@@ -30,6 +30,7 @@ const shortcutItems = [
   { keys: ['C', 'X'], label: '加速 / 减速' },
   { keys: ['Z'], label: '重置速度' },
   { keys: ['R'], label: '跳过播放并录音 / 重新录制' },
+  { keys: ['B'], label: '对比原声与我的录音' },
   { keys: ['Esc'], label: '退出专注显示' },
 ];
 </script>

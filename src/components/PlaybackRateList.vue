@@ -10,7 +10,7 @@
       >
         −
       </button>
-      <span class="rate-value" aria-live="polite">{{ formatPlaybackRate(rate) }}x</span>
+      <span class="rate-value">{{ formatPlaybackRate(rate) }}x</span>
       <button
         type="button"
         class="stepper-button"

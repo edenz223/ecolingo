@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent, webUtils } from 'electron';
 import type { FileAPI } from '../src/types/file-api';
 import type { Lesson, RecordingMetadata } from '../src/types/recording';
 
@@ -8,7 +8,10 @@ const fileAPI: FileAPI = {
   onFolderSelected: (callback: (event: IpcRendererEvent, values: Lesson[]) => void) =>
     ipcRenderer.on('folder-selected', callback),
   openFolder: () => ipcRenderer.invoke('openFolder'),
+  openFolderPath: (folderPath: string) => ipcRenderer.invoke('openFolderPath', folderPath),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   recordingIdentity: (lesson: Lesson) => ipcRenderer.invoke('recordings:identity', lesson),
+  recordingCount: (lesson: Lesson) => ipcRenderer.invoke('recordings:count', lesson),
   listRecordings: (lessonId: string | null = null) =>
     ipcRenderer.invoke('recordings:list', lessonId),
   saveRecording: (meta: RecordingMetadata, bytes: ArrayBuffer) =>

@@ -5,7 +5,12 @@ export interface FileAPI {
   readTextFile(filePath: string): Promise<string>;
   onFolderSelected(callback: (event: any, values: Lesson[]) => void): void;
   openFolder(): Promise<void>;
+  // Opens a dropped folder, or the folder containing a dropped file; false if unreadable.
+  openFolderPath?(folderPath: string): Promise<boolean>;
+  getPathForFile?(file: File): string;
   recordingIdentity(lesson: Lesson): Promise<string>;
+  // Distinct sentences with at least one saved take.
+  recordingCount?(lesson: Lesson): Promise<number>;
   listRecordings(lessonId?: string | null): Promise<RecordingClip[]>;
   saveRecording(meta: RecordingMetadata, bytes: ArrayBuffer): Promise<RecordingClip>;
   readRecording(id: string): Promise<{ bytes: Uint8Array | Buffer; mime: string }>;

@@ -30,6 +30,7 @@ function setup(overrides = {}) {
     nextSentence: record('nextSentence'),
     previousLesson: record('previousLesson'),
     nextLesson: record('nextLesson'),
+    compareSentence: record('compareSentence'),
     adjustPlaybackRate: record('adjustPlaybackRate'),
     resetPlaybackRate: record('resetPlaybackRate'),
     reload: record('reload'),
@@ -52,13 +53,13 @@ function key(code, { target = null, ...modifiers } = {}) {
 
 test('single keys dispatch practice, navigation and speed commands', () => {
   const { state, handle } = setup();
-  for (const code of ['KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE', 'KeyC', 'KeyX', 'KeyZ']) {
+  for (const code of ['KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE', 'KeyB', 'KeyC', 'KeyX', 'KeyZ']) {
     const event = key(code);
     handle(event);
     assert.equal(event.prevented, true, code);
   }
   assert.deepEqual(state.calls, [
-    'toggleShadowing', 'previousSentence', 'nextSentence', 'previousLesson', 'nextLesson',
+    'toggleShadowing', 'previousSentence', 'nextSentence', 'previousLesson', 'nextLesson', 'compareSentence',
     ['adjustPlaybackRate', 0.1], ['adjustPlaybackRate', -0.1], 'resetPlaybackRate',
   ]);
 });
@@ -87,7 +88,7 @@ test('modifiers, interactive targets and blocking dialogs suppress shortcuts', (
 
 test('without a loaded lesson only lesson switching and reload work', () => {
   const { state, handle } = setup({ lesson: false });
-  for (const code of ['KeyS', 'KeyA', 'KeyD', 'KeyC', 'KeyZ', 'KeyQ', 'KeyE']) handle(key(code));
+  for (const code of ['KeyS', 'KeyA', 'KeyD', 'KeyB', 'KeyC', 'KeyZ', 'KeyQ', 'KeyE']) handle(key(code));
   handle(key('KeyR', { ctrlKey: true }));
   assert.deepEqual(state.calls, ['previousLesson', 'nextLesson', 'reload']);
 });

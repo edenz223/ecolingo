@@ -11,12 +11,13 @@ const source = esbuild.transformSync(
 ).code;
 const scope = { module: { exports: {} } };
 vm.runInNewContext(source, scope);
-const { derivePracticeStatus, describePracticeStatus, noSpeechMessage } = scope.module.exports;
+const { derivePracticeStatus, noSpeechMessage } = scope.module.exports;
 
 const base = {
   shadowingMode: true,
   practiceMethod: 'listen',
   zenPhase: 'idle',
+  comparePhase: 'idle',
   isRecording: false,
   isShadowing: false,
   isPlayingReference: false,
@@ -27,7 +28,6 @@ const status = overrides => derivePracticeStatus({ ...base, ...overrides });
 
 test('status is hidden while shadowing is off', () => {
   assert.equal(status({ shadowingMode: false, isRecording: true }).visible, false);
-  assert.equal(describePracticeStatus(status({ shadowingMode: false })), '');
 });
 
 test('listen method moves from reference to shadowing, including microphone warm-up', () => {
@@ -39,7 +39,7 @@ test('listen method moves from reference to shadowing, including microphone warm
   assert.equal(warmUp.tone, 'active');
   const speaking = status({ isShadowing: true, isRecording: true, recordingStatus: '请开始跟读…' });
   assert.equal(speaking.tone, 'recording');
-  assert.equal(describePracticeStatus(speaking), '跟读：请开始跟读…');
+  assert.equal(speaking.message, '请开始跟读…');
 });
 
 test('Zen phases map onto replay and attempt steps', () => {
@@ -55,8 +55,7 @@ test('Zen phases map onto replay and attempt steps', () => {
 
 test('saving and replay phases explain what is happening', () => {
   assert.equal(status({ practiceMethod: 'replay', zenPhase: 'saving' }).message, '正在保存录音…');
-  const preview = status({ practiceMethod: 'replay', zenPhase: 'preview' });
-  assert.equal(describePracticeStatus(preview), '回听：正在回听你的录音');
+  assert.equal(status({ practiceMethod: 'replay', zenPhase: 'preview' }).message, '正在回听你的录音');
 });
 
 test('recorder status text wins over phase defaults', () => {
@@ -64,10 +63,18 @@ test('recorder status text wins over phase defaults', () => {
   assert.equal(limit.message, '已达到 10 秒录音上限，正在保存…');
 });
 
+test('A/B comparison shows its own steps even with shadowing off', () => {
+  const compare = phase => status({ shadowingMode: false, comparePhase: phase });
+  assert.deepEqual([...compare('original').steps], ['原声', '我的录音']);
+  assert.deepEqual(['original', 'gap', 'recording'].map(phase => compare(phase).activeStep), [0, 1, 1]);
+  assert.equal(compare('recording').visible, true);
+  const duringZen = status({ practiceMethod: 'attempt', zenPhase: 'reference', comparePhase: 'gap' });
+  assert.deepEqual([...duringZen.steps], ['原声', '我的录音']);
+});
+
 test('no speech shows a retry hint instead of a step', () => {
   const missed = status({ noSpeech: true, isPlayingReference: true });
   assert.equal(missed.message, noSpeechMessage);
   assert.equal(missed.tone, 'warning');
   assert.equal(missed.activeStep, -1);
-  assert.equal(describePracticeStatus(missed), noSpeechMessage);
 });

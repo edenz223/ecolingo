@@ -2,9 +2,11 @@ import { computed, ref, watch } from 'vue';
 import { Player } from './player';
 import { RecorderManager } from './recorder';
 import { ZenCoordinator } from './zen';
+import { CompareCoordinator } from './compare';
 import { loadSettings, saveSettings } from '../utils/settings';
 import { clampPlaybackRate } from '../utils/playback-options';
 import { derivePracticeStatus } from '../utils/practice-status';
+import { findResumeTarget, lessonKey } from '../utils/lesson-library';
 import type { Lesson, RecordingClip } from '../types/recording';
 import type { Sentence } from '../types/subtitles';
 import type { PracticeMethod } from '../types/settings';
@@ -12,6 +14,8 @@ import type { PracticeMethod } from '../types/settings';
 export interface LearningSessionOptions {
   // Scrolls the sentence list; only called while following is on and focus mode is off.
   scrollToSentence?: (sentence: Sentence) => void;
+  // Short, non-blocking feedback such as "no lessons in this folder".
+  notify?: (message: string) => void;
 }
 
 export type LearningSession = ReturnType<typeof createLearningSession>;
@@ -28,6 +32,13 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   const lessonError = ref('');
   const shadowingMode = ref(settings.shadowing);
   const focusMode = ref(false);
+  const resumePoint = ref(settings.resume);
+  // Key of the lesson whose audio and subtitles finished loading; null while switching.
+  const loadedLessonKey = ref<string | null>(null);
+  // Sentences with at least one take, per lesson key.
+  const recordedCounts = ref<Record<string, number>>({});
+  let recordingsLessonKey: string | null = null;
+  let countsSession = 0;
   const currentPlaybackRate = ref(settings.playbackRate);
 
   const player = new Player({
@@ -50,6 +61,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   const practiceMethod = zen.practiceMethod;
   const zenFirstAttempt = zen.zenFirstAttempt;
   const zenPhase = zen.zenPhase;
+  const compare = new CompareCoordinator(player, recorder);
 
   const isRecording = computed(
     () => recorder.isRecording.value || recorder.isPreparingRecording.value
@@ -70,6 +82,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       shadowingMode: shadowingMode.value && Boolean(player.sound.value),
       practiceMethod: practiceMethod.value,
       zenPhase: zenPhase.value,
+      comparePhase: compare.phase.value,
       isRecording: isRecording.value,
       isShadowing: player.isShadowing.value,
       isPlayingReference: !player.isShadowing.value && Boolean(player.sound.value?.playing()),
@@ -110,6 +123,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       options.scrollToSentence?.(sentence);
     },
     onSentenceBoundary: (sentence: Sentence) => {
+      if (compare.handleBoundary(sentence)) return true;
       if (zenMode.value && zenPhase.value === 'reference') {
         player.sound.value?.pause();
         if (player.stepTimerId) {
@@ -137,19 +151,27 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     },
     onPlayLessonStart: async (lesson: Lesson, sessionId: number) => {
       followSentence.value = true;
+      recordingsLessonKey = null;
       const lessonId = await window.fileAPI.recordingIdentity(JSON.parse(JSON.stringify(lesson)));
       if (sessionId !== player.loadSessionId) return;
       recorder.activeLessonId = lessonId;
       await recorder.refreshRecordings(lessonId, sessionId);
+      if (sessionId !== player.loadSessionId) return;
+      recordingsLessonKey = lessonKey(lesson);
+      setRecordedCount(recordingsLessonKey, Object.keys(recorder.recordings.value).length);
     },
     onStopPlayback: () => {
+      compare.cancel();
       zen.resetSession();
       recorder.stopPreview();
       recorder.clearNoSpeechNotice();
       stopSentenceRecording(true);
       if (zenMode.value) recorder.releaseRecordingResources();
     },
-    onReleaseLesson: () => recorder.releaseRecordingResources(),
+    onReleaseLesson: () => {
+      compare.cancel();
+      recorder.releaseRecordingResources();
+    },
     isZenReferencePlaying: () =>
       zenMode.value && zenPhase.value === 'reference' && Boolean(player.sound.value?.playing()),
     onTogglePlay: () => togglePlay(),
@@ -175,6 +197,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       drawerOpen,
       zenFirstAttempt,
       practiceMethod,
+      resumePoint,
     ],
     ([
       playbackRate,
@@ -184,6 +207,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       drawerOpen,
       zenFirstAttempt,
       practiceMethod,
+      resume,
     ]) => {
       saveSettings({
         playbackRate,
@@ -193,15 +217,54 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
         drawerOpen,
         zenFirstAttempt,
         practiceMethod,
+        resume,
       });
     },
     { flush: 'sync' }
   );
 
+  watch([player.currentSentence, loadedLessonKey], ([sentence, key]) => {
+    if (!sentence || !key) return;
+    const sentenceIndex = player.parsedSentences.value.indexOf(sentence);
+    if (sentenceIndex < 0) return;
+    resumePoint.value = { lessonKey: key, sentenceStart: sentence.start, sentenceIndex };
+  });
+
+  // Keep the open lesson's count live as takes are saved.
+  watch(recorder.recordings, recordings => {
+    if (recordingsLessonKey) setRecordedCount(recordingsLessonKey, Object.keys(recordings).length);
+  });
+
+  watch(lessons, list => {
+    void refreshRecordedCounts(list);
+  });
+
+  const resumeTarget = computed(() => findResumeTarget(lessons.value, resumePoint.value));
+
+  function setRecordedCount(key: string, count: number) {
+    if (recordedCounts.value[key] === count) return;
+    recordedCounts.value = { ...recordedCounts.value, [key]: count };
+  }
+
+  // One lesson at a time: identities are hashed in the main process and cached there.
+  async function refreshRecordedCounts(list: Lesson[]) {
+    const session = ++countsSession;
+    recordedCounts.value = {};
+    for (const lesson of list) {
+      try {
+        const count = await window.fileAPI?.recordingCount?.(JSON.parse(JSON.stringify(lesson)));
+        if (session !== countsSession) return;
+        if (typeof count === 'number') setRecordedCount(lessonKey(lesson), count);
+      } catch {
+        // A missing or unreadable file only hides that lesson's count.
+      }
+    }
+  }
+
   function isPlaybackActive() {
     // Read the revision so render effects re-run when Howler starts or stops.
     void player.playbackRevision.value;
-    return player.isShadowing.value || Boolean(player.sound.value?.playing());
+    return compare.isActive() || player.isShadowing.value || Boolean(player.sound.value?.playing());
   }
 
   function currentSentenceIndex() {
@@ -243,16 +306,31 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     player.handleSentenceChange(player.currentSentence.value);
   }
 
-  function playLesson(index: number, continuePlayback = false) {
+  // startAt jumps to the sentence beginning at that time once the lesson is ready.
+  function playLesson(index: number, continuePlayback = false, startAt?: number) {
     if (index >= 0 && index < lessons.value.length) {
+      const lesson = lessons.value[index];
       currentLessonIndex.value = index;
-      player.playLesson(lessons.value[index], () => {
+      loadedLessonKey.value = null;
+      player.playLesson(lesson, () => {
+        loadedLessonKey.value = lessonKey(lesson);
+        const target = player.parsedSentences.value.find(sentence => sentence.start === startAt);
+        if (target && target !== player.currentSentence.value) void player.clickSentence(target);
         if (continuePlayback && zenMode.value) zen.startZenSentence();
       });
     }
   }
 
+  function resumeLesson() {
+    const target = resumeTarget.value;
+    if (target) playLesson(target.index, false, resumePoint.value?.sentenceStart);
+  }
+
   function togglePlay() {
+    if (compare.isActive()) {
+      stopCompare();
+      return;
+    }
     if (zenMode.value) {
       if (zenPhase.value !== 'idle') player.stopCurrentPlayback();
       else zen.startZenSentence();
@@ -278,9 +356,21 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
 
   function handleOpenFolderResult(values: Lesson[]) {
     if (values && values.length > 0) {
+      // The open lesson keeps playing; point the index at it in the new list (or nowhere).
+      const openKey = player.currentLesson ? lessonKey(player.currentLesson) : null;
+      currentLessonIndex.value = openKey
+        ? values.findIndex(lesson => lessonKey(lesson) === openKey)
+        : -1;
       lessons.value = values;
       localStorage.setItem('lessons', JSON.stringify(values));
+    } else {
+      options.notify?.('这个文件夹里没有成对的音频和字幕');
     }
+  }
+
+  async function openFolderPath(folderPath: string) {
+    const opened = await window.fileAPI?.openFolderPath?.(folderPath);
+    if (!opened) options.notify?.('无法打开拖入的项目');
   }
 
   function beforeSentence() {
@@ -382,6 +472,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   }
 
   function playUserRecording(sentenceStart: number) {
+    if (compare.isActive()) stopCompare();
     recorder.playUserRecording(sentenceStart);
   }
 
@@ -390,7 +481,23 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
   }
 
   function recordCurrentSentence() {
+    compare.cancel();
     zen.recordCurrentSentence();
+  }
+
+  function stopCompare() {
+    const sentence = player.currentSentence.value;
+    player.stopCurrentPlayback();
+    if (sentence) player.sound.value?.seek(sentence.start);
+  }
+
+  // Starts or stops the A/B comparison; 'unavailable' means the sentence has no take.
+  function toggleCompare(sentence = player.currentSentence.value) {
+    if (compare.isActive() && compare.sentenceStart.value === sentence?.start) {
+      stopCompare();
+      return 'stopped' as const;
+    }
+    return sentence && compare.start(sentence) ? ('started' as const) : ('unavailable' as const);
   }
 
   function start() {
@@ -426,6 +533,10 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     recordingError,
     activeError,
     practiceStatus,
+    resumeTarget,
+    recordedCounts,
+    comparePhase: compare.phase,
+    compareSentenceStart: compare.sentenceStart,
     recordingRevision: recorder.recordingRevision,
     recordingVoiceActive: recorder.recordingVoiceActive,
     recordingStatus: recorder.recordingStatus,
@@ -443,12 +554,14 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     pauseFollowing,
     resumeFollowing,
     playLesson,
+    resumeLesson,
     togglePlay,
     beforeSentence,
     nextSentence,
     prev,
     next,
     openFolder,
+    openFolderPath,
     toggleShadowingMode,
     setPlaybackRate,
     startSentenceRecording,
@@ -459,6 +572,7 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     playUserRecording,
     releaseRecordingResources,
     recordCurrentSentence,
+    toggleCompare,
     start,
     dispose,
   };

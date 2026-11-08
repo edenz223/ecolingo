@@ -177,7 +177,7 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 - 全局禁用水波纹 (`.q-ripple { display: none }`) 和 `.q-focus-helper`——保持不变。
 - **默认按钮（flat）**：透明底，文字/图标 `--ink`；hover 时背景 `--bg-hover`，无边框色变化；active 时背景 `--bg-active`。
 - **主操作按钮**（播放/暂停大圆钮）：实色 `$primary`（即深暖灰），文字/图标白色，圆形。投影 `--shadow-sm`。hover 时颜色加深 5%。
-- **空状态 CTA**（「打开课程文件夹」）：实色 `$primary`，白色文字，圆角 `--radius-md`，投影 `--shadow-sm`。
+- **空状态 CTA**（「继续练习」/「从第一课开始」/「打开课程文件夹」）：实色 `$primary`，白色文字，圆角 `--radius-md`，投影 `--shadow-sm`。
 - 圆形按钮保持 `border-radius: 50%`。
 - 非圆形按钮圆角 `--radius-md`。
 
@@ -207,6 +207,7 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 - 循环模式：`repeat` / `repeat_one`
 - 错误提示：`warning`
 - 录音回放：`play_circle` / `stop_circle`
+- 原声 / 录音对比：`compare_arrows`（进行中显示 `stop_circle`）
 
 图标尺寸 18–20 px，颜色跟随文字令牌。不使用填充色或彩色背景圈住图标（录音异常对话框中 `warning` 图标也不再套圆形/方形色块，直接裸图标 + 文字）。
 
@@ -241,14 +242,22 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 开启跟读且已加载课程时显示练习状态（`src/components/PracticeStatus.vue`，状态由 `src/utils/practice-status.ts` 推导）：
 
 - 步骤随练习方式变化：先听后读「听原声 · 跟读」；听读回听「听原声 · 跟读 · 回听」；先读再听「尝试 · 听原声 · 跟读 · 回听」。当前步骤用 `--active-ink` / `--active-bg` 胶囊高亮，录音中改用 `--recording-ink` / `--recording-bg`；已完成步骤 `--ink-muted`，未到步骤 `--ink-faint`；等待开始时不高亮任何步骤。
+- A/B 对比进行时（无论是否开启跟读）改为显示「原声 · 我的录音」两步：播放原声高亮第一步，停顿和播放录音时高亮第二步。
 - 步骤后显示一行说明文字（`--text-caption`，超长省略）：录音器状态（「请开始跟读…」「等待说完：静音 1.2 秒后结束」「已达到 10 秒录音上限，正在保存…」等），Zen 保存与回听阶段显示「正在保存录音…」「正在回听你的录音」。
 - 没检测到语音时不高亮步骤，改为 `--warning-ink` 显示「没听到声音，按空格重试」，持续 2 秒。
 - 普通模式放在课程标题栏（句子计数右侧）；专注模式固定在舞台顶部居中，不挤占句子布局。窗口 ≤ 600 px 时只显示当前步骤。
-- 布局里有一个常驻的 `sr-only` 礼貌播报区，读出「当前步骤：说明」，没有状态但在录音时读「正在录音」。
 
 ## 按键提示
 
-键盘触发 C / X / Z、Q / E、S 时，在窗口底部中央（`bottom: 96px`，高于底栏和专注模式的录音按钮）显示约 1.2 秒的胶囊提示（`src/components/ActionHud.vue`）：「速度 1.1x」「第 3 课 · 课程名」「跟读已开启 · 先听后读」「跟读已关闭」。鼠标操作不显示（控件本身可见）。胶囊 `--bg-raised`、1 px `--border-strong`、`--radius-full`、`--shadow-md`，150 ms 淡入淡出，减少动态效果时无过渡；提示容器本身是礼貌播报区。
+键盘触发 C / X / Z、Q / E、S 时，在窗口底部中央（`bottom: 96px`，高于底栏和专注模式的录音按钮）显示约 1.2 秒的胶囊提示（`src/components/ActionHud.vue`）：「速度 1.1x」「第 3 课 · 课程名」「跟读已开启 · 先听后读」「跟读已关闭」。鼠标操作不显示（控件本身可见）。同一提示也用于打开文件夹的反馈（无成对课程、拖入项无法读取）。胶囊 `--bg-raised`、1 px `--border-strong`、`--radius-full`、`--shadow-md`，150 ms 淡入淡出，减少动态效果时无过渡。
+
+## 空状态与课程列表
+
+- 空状态（`src/components/LessonEmptyState.vue`）按情况切换：有可继续的位置时标题「继续上次的练习」、说明「课程名 · 第 N 句」、主按钮「继续练习」；已有课程列表时「选择一课开始」、「文件夹名 · 共 N 课」、主按钮「从第一课开始」；没有课程时「开始今天的跟读」、主按钮「打开课程文件夹」。有课程时下方另有 flat 按钮「打开其他文件夹」，底部 `--text-caption` / `--ink-muted` 提示「也可以把课程文件夹拖到窗口里」。
+- 课程抽屉顶部两行标题：「课程列表」（`--text-caption` / 600 / `--ink-muted`）和文件夹名（`--text-body` / 500 / `--ink-strong`，超长省略），右侧 `folder_open` 小按钮打开其他文件夹。
+- 课程多于 15 节时显示筛选输入框（30 px 高，`--bg-sunken`，1 px `--border`，`--radius-md`），按名称不区分大小写过滤；无匹配时显示「没有匹配的课程」。
+- 有录音的课程在名称下显示「已录 N 句」（`--text-caption` / `--ink-muted`，当前课程中透明度 0.75）。
+- 拖入文件时全窗口显示 `rgba(0, 0, 0, 0.15)` 遮罩和居中卡片「松开以打开课程文件夹」（`--bg-raised`、`--radius-lg`、`--shadow-lg`），遮罩不拦截指针事件。
 
 ## 字幕列表
 
@@ -256,7 +265,9 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 - 当前播放句高亮：`--text-sentence-active`（19 px）/ 600，背景 `--active-bg`，文字 `--ink-strong`，左侧 2 px `--accent` 内阴影竖线作为指示条。
 - 悬停：背景 `--bg-hover`。
 - 句子切换自动滚动居中；用户手动滚动后暂停跟随，显示「回到当前句」。
-- 录音句右侧显示播放/停止录音按钮（`play_circle` / `stop_circle`），颜色 `--ink-muted`，hover 时 `--ink`。
+- 有录音的句子右侧依次显示对比按钮（`compare_arrows`）和播放/停止录音按钮（`play_circle` / `stop_circle`），颜色 `--ink-muted`，hover 时 `--ink`。对比进行中，该句对比按钮变为 `stop_circle`（`primary`），播放录音按钮隐藏；播放录音阶段该句使用回放高亮。
+- 操作列固定 84 px，所有句子文本宽度一致。
+- 句子获得焦点后，↑ / ↓ 在句子间移动焦点并保持可见，Enter 播放该句；方向键同时暂停自动跟随。
 
 ---
 
@@ -297,7 +308,9 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 
 ## 快捷键
 
-空格 播放/暂停 | S 跟读 | A/D 上/下一句 | Q/E 上/下一课 | C/X 加/减速 | Z 重置速度 | Esc 退出专注显示
+空格 播放/暂停 | S 跟读 | A/D 上/下一句 | Q/E 上/下一课 | B 对比原声与录音 | C/X 加/减速 | Z 重置速度 | Esc 退出专注显示
+
+当前句没有录音时按 B 显示按键提示「这句还没有录音」。
 
 快捷键对话框（标题栏「帮助」）用 `<kbd>` 两列列出全部按键，内容与上面保持同步。专注模式下有菜单打开时，Esc 先关闭菜单，再按一次才退出专注模式。
 
@@ -315,10 +328,11 @@ CSS 变量 `--accent` 设为 `rgb(0, 122, 204)`。
 | -------------------------------------- | ---------------------------------------------------- |
 | `src/css/app.scss`                     | 全部重写：令牌、表面、按钮、滚动条、无障碍           |
 | `src/css/quasar.variables.scss`        | `$primary` 等品牌色                                  |
-| `src/layouts/MainLayout.vue` `<style>` | 空状态卡片                                           |
+| `src/layouts/MainLayout.vue` `<style>` | 拖放遮罩                                             |
+| `src/components/LessonEmptyState.vue`  | 空状态卡片、继续上次                                 |
 | `src/components/AppTitleBar.vue`       | 系统标题栏、窗口控制按钮（样式在 `app.scss`）        |
 | `src/components/LessonHeading.vue`     | 课程标题、句子计数、回到当前句、抽屉开关             |
-| `src/components/LessonDrawer.vue`      | 课程列表抽屉                                         |
+| `src/components/LessonDrawer.vue`      | 课程列表抽屉：文件夹名、筛选、已录句数               |
 | `src/components/SentenceList.vue`      | 字幕列表、录音回放按钮                               |
 | `src/components/ZenStage.vue`          | 专注模式舞台与邻句模糊                               |
 | `src/components/PlaybackBar.vue`       | 底栏：播放控制、跟读开关、练习方式、循环、速度、更多 |

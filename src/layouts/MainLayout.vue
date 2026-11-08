@@ -19,7 +19,6 @@
       </LessonHeading>
     </q-header>
 
-    <div class="sr-only" role="status" aria-live="polite">{{ practiceAnnouncement }}</div>
     <ActionHud :message="hudMessage" />
 
     <ShortcutsDialog v-model="showShortcuts" />
@@ -35,24 +34,34 @@
       v-model="drawerOpen"
       :lessons="lessons"
       :current-index="currentLessonIndex"
+      :recorded-counts="recordedCounts"
       @select="index => session.playLesson(index)"
+      @open-folder="session.openFolder"
     />
+
+    <div v-if="dropActive" class="drop-overlay">
+      <div class="drop-overlay__card">
+        <q-icon name="folder_open" size="20px" />松开以打开课程文件夹
+      </div>
+    </div>
 
     <q-page-container>
       <q-page padding class="learning-page" :class="{ 'learning-page--focus': focusMode }">
-        <div v-if="!player.parsedSentences.value.length" class="lesson-empty">
-          <q-icon name="headphones" size="48px" color="primary" />
-          <div class="text-h6">{{ lessonLoading ? '正在打开课程…' : '开始今天的跟读' }}</div>
-          <div class="text-grey-7">选择包含音频和字幕的文件夹</div>
-          <q-btn
-            unelevated
-            color="primary"
-            icon="folder_open"
-            label="打开课程文件夹"
-            :loading="lessonLoading"
-            @click="session.openFolder"
-          />
-        </div>
+        <LessonEmptyState
+          v-if="!player.parsedSentences.value.length"
+          :loading="lessonLoading"
+          :lesson-count="lessons.length"
+          :folder-name="lessonFolderName(lessons)"
+          :resume="
+            resumeTarget && {
+              lessonName: resumeTarget.lesson.name,
+              sentenceNumber: resumeTarget.sentenceIndex + 1,
+            }
+          "
+          @resume="session.resumeLesson"
+          @start="session.playLesson(0)"
+          @open-folder="session.openFolder"
+        />
         <ZenStage
           v-else-if="focusMode"
           :previous="session.zenNeighbor(-1)"
@@ -70,9 +79,11 @@
           :preview-clip-id="previewClipId"
           :is-recording="isRecording"
           :no-speech-sentence="noSpeechSentence"
+          :compare-sentence-start="compareSentenceStart"
           @sentence-click="(sentence, event) => player.handleSentenceClick(sentence, event)"
           @sentence-dblclick="sentence => player.doubleClickSentence(sentence)"
           @play-recording="session.playUserRecording"
+          @compare="sentence => session.toggleCompare(sentence)"
           @browse="session.pauseFollowing"
         />
       </q-page>
@@ -107,11 +118,12 @@
   </q-layout>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 import ActionHud from '../components/ActionHud.vue';
 import AppErrorDialog from '../components/AppErrorDialog.vue';
 import AppTitleBar from '../components/AppTitleBar.vue';
 import LessonDrawer from '../components/LessonDrawer.vue';
+import LessonEmptyState from '../components/LessonEmptyState.vue';
 import LessonHeading from '../components/LessonHeading.vue';
 import PlaybackBar from '../components/PlaybackBar.vue';
 import PracticeStatus from '../components/PracticeStatus.vue';
@@ -124,7 +136,7 @@ import { createKeyboardShortcuts } from '../utils/keyboard-shortcuts';
 import { createPlaybackShortcut } from '../utils/playback-shortcut';
 import { createRecordingRestartShortcut } from '../utils/recording-shortcut';
 import { formatPlaybackRate } from '../utils/playback-options';
-import { describePracticeStatus } from '../utils/practice-status';
+import { lessonFolderName } from '../utils/lesson-library';
 import type { Sentence } from '../types/subtitles';
 
 const isWindows = window.fileAPI?.platform === 'win32';
@@ -133,7 +145,7 @@ const pointerInteraction = ref(false);
 const controlsMenuOpen = ref(false);
 const playbackBar = ref<InstanceType<typeof PlaybackBar> | null>(null);
 
-const session = createLearningSession({ scrollToSentence });
+const session = createLearningSession({ scrollToSentence, notify: showHud });
 const {
   player,
   drawerOpen,
@@ -153,6 +165,9 @@ const {
   recordings,
   noSpeechSentence,
   previewClipId,
+  compareSentenceStart,
+  resumeTarget,
+  recordedCounts,
 } = session;
 
 function scrollToSentence(sentence: Sentence) {
@@ -162,10 +177,6 @@ function scrollToSentence(sentence: Sentence) {
     block: 'center',
   });
 }
-
-const practiceAnnouncement = computed(
-  () => describePracticeStatus(practiceStatus.value) || (isRecording.value ? '正在录音' : '')
-);
 
 // Brief confirmation for keyboard commands whose control may be hidden (focus mode).
 const hudMessage = ref('');
@@ -187,6 +198,10 @@ function showRateHud() {
 function showLessonHud() {
   const lesson = lessons.value[currentLessonIndex.value];
   if (lesson) showHud(`第 ${currentLessonIndex.value + 1} 课 · ${lesson.name}`);
+}
+
+function compareFromKeyboard() {
+  if (session.toggleCompare() === 'unavailable') showHud('这句还没有录音');
 }
 
 function toggleShadowingFromKeyboard() {
@@ -237,6 +252,7 @@ const keyboardShortcut = createKeyboardShortcuts({
     session.next();
     showLessonHud();
   },
+  compareSentence: compareFromKeyboard,
   adjustPlaybackRate: delta => {
     session.setPlaybackRate(currentPlaybackRate.value + delta);
     showRateHud();
@@ -275,8 +291,51 @@ function handleGlobalPointerDown(e: Event) {
   }
 }
 
+// Dropping a folder (or a file inside one) opens it; without preventDefault
+// Electron would navigate the window to the dropped file.
+const dropActive = ref(false);
+let dragDepth = 0;
+
+function carriesFiles(event: DragEvent) {
+  return Array.from(event.dataTransfer?.types || []).includes('Files');
+}
+
+function handleDragEnter(event: DragEvent) {
+  if (!carriesFiles(event)) return;
+  event.preventDefault();
+  dragDepth++;
+  dropActive.value = true;
+}
+
+function handleDragOver(event: DragEvent) {
+  if (!carriesFiles(event)) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+}
+
+function handleDragLeave(event: DragEvent) {
+  if (!carriesFiles(event)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) dropActive.value = false;
+}
+
+function handleDrop(event: DragEvent) {
+  event.preventDefault();
+  dragDepth = 0;
+  dropActive.value = false;
+  const file = event.dataTransfer?.files[0];
+  if (!file) return;
+  const droppedPath = window.fileAPI?.getPathForFile?.(file);
+  if (droppedPath) void session.openFolderPath(droppedPath);
+  else showHud('无法打开拖入的项目');
+}
+
 onMounted(() => {
   session.start();
+  window.addEventListener('dragenter', handleDragEnter);
+  window.addEventListener('dragover', handleDragOver);
+  window.addEventListener('dragleave', handleDragLeave);
+  window.addEventListener('drop', handleDrop);
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keydown', playbackShortcut.keydown, true);
   window.addEventListener('keydown', recordingRestartShortcut, true);
@@ -298,43 +357,37 @@ onUnmounted(() => {
   window.removeEventListener('blur', playbackShortcut.reset);
   window.removeEventListener('pointerdown', handleScrollPointer);
   window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
+  window.removeEventListener('dragenter', handleDragEnter);
+  window.removeEventListener('dragover', handleDragOver);
+  window.removeEventListener('dragleave', handleDragLeave);
+  window.removeEventListener('drop', handleDrop);
   session.dispose();
 });
 </script>
 
 <style>
-.lesson-empty {
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(8px, 2vh, 14px);
-  text-align: center;
-  max-width: 420px;
-  width: 100%;
-  margin: auto;
-  padding: clamp(24px, 4vh, 40px) 28px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
 }
 
-.lesson-empty .text-h6 {
-  font-family: var(--font-display);
-  font-size: var(--text-title);
-  font-weight: 500;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-}
-
-.lesson-empty .text-grey-7 {
+.drop-overlay__card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--ink-strong);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
   font-size: var(--text-body);
-  line-height: 1.5;
-  color: var(--ink-muted);
-}
-
-.lesson-empty > .q-icon {
-  font-size: 36px !important;
-  color: var(--ink-muted) !important;
+  font-weight: 500;
 }
 </style>

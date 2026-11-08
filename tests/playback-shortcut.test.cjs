@@ -1,17 +1,8 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
 const test = require('node:test');
-const esbuild = require('esbuild');
+const { loadTs } = require('./helpers/load-ts.cjs');
 
-const source = esbuild.transformSync(
-  fs.readFileSync(path.join(__dirname, '../src/utils/playback-shortcut.ts'), 'utf8'),
-  { loader: 'ts', format: 'cjs' }
-).code;
-const scope = { module: { exports: {} } };
-vm.runInNewContext(source, scope);
-const { createPlaybackShortcut } = scope.module.exports;
+const { createPlaybackShortcut } = loadTs('src/utils/playback-shortcut.ts');
 
 function setup() {
   const state = { blocked: false, loaded: true, plays: 0 };

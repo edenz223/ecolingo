@@ -1,18 +1,11 @@
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const vm = require('node:vm');
 const test = require('node:test');
-const esbuild = require('esbuild');
+const { loadTs } = require('./helpers/load-ts.cjs');
 
-const source = esbuild.buildSync({
-  entryPoints: [path.join(__dirname, '../src/utils/keyboard-shortcuts.ts')],
-  bundle: true,
-  format: 'cjs',
-  write: false,
-}).outputFiles[0].text;
-const scope = { module: { exports: {} } };
-vm.runInNewContext(source, scope);
-const { createKeyboardShortcuts } = scope.module.exports;
+const playbackOptions = loadTs('src/utils/playback-options.ts');
+const { createKeyboardShortcuts } = loadTs('src/utils/keyboard-shortcuts.ts', {
+  require: () => playbackOptions,
+});
 
 function setup(overrides = {}) {
   const state = { focus: false, menu: false, blocked: false, lesson: true, calls: [], ...overrides };

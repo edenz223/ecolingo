@@ -1,17 +1,8 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
-const vm = require('node:vm');
+const { loadTs } = require('./helpers/load-ts.cjs');
 
-const esbuild = require('esbuild');
-
-const raw = fs.readFileSync(path.join(__dirname, '../src/utils/lyrics-util.ts'), 'utf8');
-const source = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
-const scope = { exports: {}, module: {} };
-scope.module.exports = scope.exports;
-vm.runInNewContext(source, scope);
-Object.assign(scope, scope.module.exports);
+const scope = loadTs('src/utils/lyrics-util.ts');
 
 test('LRC skips empty and Unicode whitespace lyrics before computing boundaries', () => {
   const sentences = scope.parseLRC([

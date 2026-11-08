@@ -1,18 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
-const path = require('node:path');
-const esbuild = require('esbuild');
-const raw = fs.readFileSync(path.join(__dirname, '../src/utils/settings.ts'), 'utf8');
-const source = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
-function session(storage) {
-  const scope = { localStorage: storage, exports: {}, module: {} };
-  scope.module.exports = scope.exports;
-  vm.runInNewContext(source, scope);
-  Object.assign(scope, scope.module.exports);
-  return scope;
-}
+const { loadTs } = require('./helpers/load-ts.cjs');
+const session = storage => loadTs('src/utils/settings.ts', { localStorage: storage });
 
 test('all supported preferences survive a new session, including false values', () => {
   const values = new Map();

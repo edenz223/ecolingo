@@ -1,24 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const vm = require('node:vm');
-const path = require('node:path');
-const root = path.join(__dirname, '..');
-const esbuild = require('esbuild');
+const { loadTs, stripModule } = require('./helpers/load-ts.cjs');
 
-function loadTsModule(filePath) {
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const compiled = esbuild.transformSync(raw, { loader: 'ts', format: 'cjs' }).code;
-  const mod = { exports: {} };
-  vm.runInNewContext(compiled, { exports: mod.exports, module: mod });
-  return mod.exports;
-}
-
-const detectorScope = loadTsModule(path.join(root, 'src/utils/voice-activity.ts'));
-const settingsScope = loadTsModule(path.join(root, 'src/utils/settings.ts'));
-const zenScope = loadTsModule(path.join(root, 'src/utils/zen-flow.ts'));
-const playbackOptionsScope = loadTsModule(path.join(root, 'src/utils/playback-options.ts'));
-const practiceStatusScope = loadTsModule(path.join(root, 'src/utils/practice-status.ts'));
+const detectorScope = loadTs('src/utils/voice-activity.ts');
+const settingsScope = loadTs('src/utils/settings.ts');
+const zenScope = loadTs('src/utils/zen-flow.ts');
+const playbackOptionsScope = loadTs('src/utils/playback-options.ts');
+const practiceStatusScope = loadTs('src/utils/practice-status.ts');
 
 function signal(options) {
   let now = 0;
@@ -95,17 +84,11 @@ test('a delayed timer does not invent sustained speech', () => {
   assert.equal(detect(0, 8000).reason, 'no-speech');
 });
 
-const stripModule = (filePath) =>
-  esbuild.transformSync(fs.readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'esm' }).code
-    .replace(/^import .*;\r?\n/gm, '')
-    .replace(/^export (\{.*\}|default |const |class |function |let |var )/gm, '$1')
-    .replace(/^export \{[\s\S]*?\};?\r?\n/gm, '');
-
-const playerCode = stripModule(path.join(root, 'src/modules/player.ts'));
-const recorderCode = stripModule(path.join(root, 'src/modules/recorder.ts'));
-const zenCode = stripModule(path.join(root, 'src/modules/zen.ts'));
-const compareCode = stripModule(path.join(root, 'src/modules/compare.ts'));
-const sessionCode = stripModule(path.join(root, 'src/modules/learning-session.ts'));
+const playerCode = stripModule('src/modules/player.ts');
+const recorderCode = stripModule('src/modules/recorder.ts');
+const zenCode = stripModule('src/modules/zen.ts');
+const compareCode = stripModule('src/modules/compare.ts');
+const sessionCode = stripModule('src/modules/learning-session.ts');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function setup({ deferredAccess = false, denied = false, saveFailure = false } = {}) {
   let access;

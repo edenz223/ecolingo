@@ -1,19 +1,10 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const esbuild = require('esbuild');
+const { stripModule } = require('./helpers/load-ts.cjs');
 
-const root = path.join(__dirname, '..');
-const stripModule = (filePath) =>
-  esbuild.transformSync(fs.readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'esm' }).code
-    .replace(/^import .*;\r?\n/gm, '')
-    .replace(/^export (\{.*\}|default |const |class |function |let |var )/gm, '$1')
-    .replace(/^export \{[\s\S]*?\};?\r?\n/gm, '');
-
-const playerSource = stripModule(path.join(root, 'src/modules/player.ts'));
-const recorderSource = stripModule(path.join(root, 'src/modules/recorder.ts'));
+const playerSource = stripModule('src/modules/player.ts');
+const recorderSource = stripModule('src/modules/recorder.ts');
 
 function setup() {
   const reads = new Map();

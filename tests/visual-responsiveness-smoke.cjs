@@ -1,81 +1,18 @@
 // Comprehensive visual responsiveness smoke test for EcoLingo
 // Covers: 600x520 min size, 850px breakpoint, 1000x600 default, maximized,
 // long titles, multiline subtitles, drawer toggle, practice menu, and keyboard focus.
-const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { runUiSmoke } = require('./helpers/electron-ui.cjs');
 
-const root = path.join(__dirname, '..');
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecolingo-visual-'));
-app.setPath('userData', path.join(temp, 'profile'));
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('force-device-scale-factor', '1.5'); // Test with high-DPI scaling
-
-const preload = path.join(temp, 'preload.cjs');
-fs.writeFileSync(preload, `
-  const { contextBridge } = require('electron');
-  const fs = require('node:fs');
-  const folder = ${JSON.stringify(path.join(root, 'resources'))};
-  let selected;
-  // Create a lesson with an extra-long name to test title truncation
-  const lesson = {
-    name: '002 02 - An Extremely Long Title That Stretches Across The Entire Top Header To Verify Text Truncation',
-    audio: { path: folder, name: '002 02.mp3' },
-    lyrics: { path: folder, name: '002 02.lrc' }
-  };
-  contextBridge.exposeInMainWorld('fileAPI', {
-    platform: 'win32',
-    onFolderSelected(fn) { selected = fn; },
-    openFolder() { selected({}, [lesson]); },
-    recordingIdentity: async () => 'fixture',
-    listRecordings: async () => [{ id: 'fixture-take', start: 6.39, text: 'Fixture', lessonName: lesson.name, createdAt: Date.now() }],
-    readTextFile: async (file) => fs.readFileSync(file, 'utf8'),
-    readRecording: async () => ({ bytes: fs.readFileSync(folder + '/002 02.mp3'), mime: 'audio/mpeg' }),
-  });
-`);
-
-app.whenReady().then(async () => {
-  const win = new BrowserWindow({
-    show: false,
-    width: 1000,
-    height: 600,
-    minWidth: 600,
-    minHeight: 520,
-    frame: true,
-    resizable: true,
-    maximizable: true,
-    thickFrame: true,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#5c6b77', height: 34 },
-    webPreferences: {
-      preload,
-      sandbox: false,
-      contextIsolation: true,
-      webSecurity: false,
-      backgroundThrottling: false,
-      offscreen: true,
-    }
-  });
-
-  win.webContents.setAudioMuted(true);
-  const evaluate = (source) => win.webContents.executeJavaScript(source);
-
-  async function waitFor(condition, timeoutMs = 8000) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      if (await evaluate(condition)) return;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    throw new Error('Timeout waiting for: ' + condition);
-  }
-
-  try {
-    await win.loadFile(path.join(root, 'dist/electron/UnPackaged/index.html'));
-    await waitFor(`Boolean(document.querySelector('.lesson-empty button'))`);
-
+runUiSmoke({
+  prefix: 'ecolingo-visual-',
+  // Extra-long name to test title truncation
+  lessonName: '002 02 - An Extremely Long Title That Stretches Across The Entire Top Header To Verify Text Truncation',
+  window: { width: 1000, height: 600, minWidth: 600, minHeight: 520 },
+  switches: { 'force-device-scale-factor': '1.5' }, // Test with high-DPI scaling
+}, async ({ win, temp, evaluate, waitFor }) => {
     console.log('1. Loading sample lesson with long title...');
     await evaluate(`document.querySelector('.lesson-empty button').click()`);
     await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
@@ -254,11 +191,4 @@ app.whenReady().then(async () => {
 
     console.log('ALL VISUAL & RESPONSIVENESS TESTS PASSED!');
     console.log('Screenshots generated in: ' + temp);
-  } catch (err) {
-    console.error(err);
-    process.exitCode = 1;
-  } finally {
-    win.destroy();
-    app.exit(process.exitCode || 0);
-  }
 });

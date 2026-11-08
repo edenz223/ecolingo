@@ -280,12 +280,21 @@ body,
 }
 
 .app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-sans);
   font-size: var(--text-caption);
   font-weight: 600;
   color: var(--ink-muted);
   padding: 2px 8px 2px 2px;
   letter-spacing: -0.01em;
+}
+
+.app-brand__icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
 }
 
 .titlebar-menu-btn {

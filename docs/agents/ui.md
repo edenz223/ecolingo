@@ -325,6 +325,8 @@ CSS 变量 `--accent` 为 `rgb(0, 122, 204)`，两种外观相同，用于实色
 
 ## Electron 窗口与标题栏
 
+- 应用图标（方案「影子」）：深色圆角方底 `#1c1917`，白色五条声波是原声，向右下错开的 `#2f9be8` 声波是跟读的「影子」。母版是 `src-electron/icons/icon.svg`；`icon.png` / `icon.ico` / `icon.icns` 和 `public/favicon.ico`、`public/icons/favicon-*.png` 都由它导出，改图标时先改母版，再重新导出全部尺寸。标题栏「EcoLingo」左侧显示 16 px 图标（`public/icons/favicon-32x32.png`）。
+
 - 正常模式下右上角具备三个窗口操作按钮（最小化、最大化/还原、关闭），关闭按钮支持红色悬浮高亮。
 - 双击系统标题栏空白区域可切换窗口最大化与还原。
 - 专注模式下标题栏整体隐藏，窗口控制按钮随之隐藏。

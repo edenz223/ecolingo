@@ -93,7 +93,6 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
       isRecording: isRecording.value,
       isShadowing: player.isShadowing.value,
       isPlayingReference: !player.isShadowing.value && Boolean(player.sound.value?.playing()),
-      recordingStatus: recorder.recordingStatus.value,
       noSpeech: recorder.noSpeechSentence.value !== null,
     });
   });
@@ -241,6 +240,13 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
     const sentenceIndex = player.parsedSentences.value.indexOf(sentence);
     if (sentenceIndex < 0) return;
     resumePoint.value = { lessonKey: key, sentenceStart: sentence.start, sentenceIndex };
+  });
+
+  // Open the microphone while the original plays, so recording can begin right
+  // after the sentence instead of waiting for the device and audio graph to start.
+  watch(player.playbackRevision, () => {
+    if (shadowingMode.value && !compare.isActive() && player.sound.value?.playing())
+      void recorder.ensureRecorderAccess();
   });
 
   // Keep the open lesson's count live as takes are saved.

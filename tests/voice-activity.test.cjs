@@ -743,6 +743,26 @@ test('changing first attempt cancels an active take and applies on next start', 
   } finally { h.cleanup(); }
 });
 
+test('the microphone opens while the original plays, only with shadowing on', async () => {
+  const h = setup();
+  try {
+    h.shadowingMode.value = false;
+    h.player.playbackRevision.value++;
+    await flush();
+    assert.equal(h.recorder.mediaRecorder, null);
+    h.shadowingMode.value = true;
+    h.sound.active = false;
+    h.player.playbackRevision.value++;
+    await flush();
+    assert.equal(h.recorder.mediaRecorder, null);
+    h.sound.active = true;
+    h.player.playbackRevision.value++;
+    await flush();
+    assert.ok(h.recorder.mediaRecorder);
+    assert.equal(h.isRecording.value, false);
+  } finally { h.cleanup(); }
+});
+
 test('shadowing is the parent switch: enabling needs no microphone and disabling exits Zen', async () => {
   const h = setup({ denied: true });
   try {

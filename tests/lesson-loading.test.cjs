@@ -1,10 +1,11 @@
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const test = require('node:test');
-const { stripModule } = require('./helpers/load-ts.cjs');
+const { loadTs, stripModule } = require('./helpers/load-ts.cjs');
 
 const playerSource = stripModule('src/modules/player.ts');
 const recorderSource = stripModule('src/modules/recorder.ts');
+const { lessonMediaUrl } = loadTs('src/utils/lesson-media.ts', { URL });
 
 function setup() {
   const reads = new Map();
@@ -25,7 +26,7 @@ function setup() {
     play() { this.active = true; this.plays = (this.plays || 0) + 1; this.options.onplay(); }
   }
   const context = vm.createContext({
-    ref: value => ({ value }), Howl, console,
+    ref: value => ({ value }), Howl, console, lessonMediaUrl,
     window: { fileAPI: { readTextFile: path => new Promise((resolve, reject) => reads.set(path, { resolve, reject })) } },
     parseLRC: text => [{ start: 0, text }],
     shadowingMode,
@@ -58,6 +59,13 @@ function setup() {
   const resolve = (name) => reads.get(`/lessons/${name}.lrc`).resolve(name);
   return { player, sounds, frames, lesson, resolve, shadowingMode, recordingEvents, context };
 }
+
+test('lesson audio loads through the lesson-media scheme, not a file path', async () => {
+  const { player, sounds, lesson, resolve } = setup();
+  const pending = player.playLesson(lesson('A'));
+  resolve('A'); await pending;
+  assert.deepEqual([...sounds[0].options.src], ['lesson-media://lesson/%2Flessons%2FA.mp3']);
+});
 
 test('resuming at a saved sentence starts there with a single play call', async () => {
   const { player, sounds, lesson, resolve, context } = setup();

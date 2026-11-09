@@ -9,7 +9,7 @@
     "lint": "eslint --ext .js,.ts,.vue ./",
     "typecheck": "vue-tsc --noEmit",
     "test": "node --test tests/*.test.cjs",
-    "test:smoke": "electron tests/voice-activity-smoke.cjs && electron tests/learning-ui-smoke.cjs && electron tests/visual-responsiveness-smoke.cjs",
+    "test:smoke": "electron tests/app-smoke.cjs && electron tests/voice-activity-smoke.cjs && electron tests/learning-ui-smoke.cjs && electron tests/visual-responsiveness-smoke.cjs",
     "dev": "quasar dev -m electron",
     "build": "quasar build --mode electron"
   },

@@ -12,6 +12,8 @@ import path from 'path';
 import os from 'os';
 import { FileProcessor } from './fileSystem';
 import { RecordingStore, createLessonIdentityCache } from './recording-store';
+import { createLessonAccess } from './lesson-access';
+import { handleLessonMedia, registerLessonMediaScheme } from './lesson-media';
 
 // Builds before 0.1.0 were named "ecolingo"; keep their recordings where the
 // file system is case-sensitive.
@@ -20,12 +22,14 @@ if (!fs.existsSync(app.getPath('userData')) && fs.existsSync(legacyUserData)) {
   app.setPath('userData', legacyUserData);
 }
 
+registerLessonMediaScheme();
+
 const fileProcessor = new FileProcessor();
 const lessonIdentity = createLessonIdentityCache();
+const lessonAccess = createLessonAccess();
 
 let mainWindow: BrowserWindow | null = null;
 
-// 修改 handleFolderOpen 函数
 async function handleFolderOpen() {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
@@ -67,14 +71,14 @@ function loadLessonFolder(folderPath: string) {
     });
   }
 
+  lessonAccess.allowLessons(completeLessons);
   mainWindow?.webContents.send('folder-selected', completeLessons);
 }
 
-function readTextFile(_event: any, filePath: string) {
-  return fileProcessor.readTextFile(filePath);
+function readTextFile(_event: unknown, filePath: unknown) {
+  return fileProcessor.readTextFile(lessonAccess.resolveFile(filePath, 'lyrics'));
 }
 
-// 修改 ipcMain 处理程序
 ipcMain.handle('openFolder', handleFolderOpen);
 ipcMain.handle('openFolderPath', handleFolderPathOpen);
 ipcMain.handle('readTextFile', readTextFile);
@@ -92,12 +96,16 @@ function getRecordingStore(): Promise<RecordingStore> {
   return recordingStorePromise;
 }
 
-ipcMain.handle('recordings:identity', (_event, lesson) => lessonIdentity(lesson));
+ipcMain.handle('recordings:identity', (_event, lesson) =>
+  lessonIdentity(lessonAccess.resolveLesson(lesson))
+);
 ipcMain.handle('recordings:list', async (_event, lessonId) =>
   (await getRecordingStore()).list(lessonId)
 );
 ipcMain.handle('recordings:count', async (_event, lesson) =>
-  (await getRecordingStore()).countSentences(await lessonIdentity(lesson))
+  (await getRecordingStore()).countSentences(
+    await lessonIdentity(lessonAccess.resolveLesson(lesson))
+  )
 );
 ipcMain.handle('recordings:save', async (_event, meta, bytes) =>
   (await getRecordingStore()).save(meta, bytes)
@@ -194,7 +202,6 @@ function createWindow() {
     webPreferences: {
       // Keep the audio-clock checks running while the lesson window is minimized.
       backgroundThrottling: false,
-      webSecurity: false,
       sandbox: true,
       contextIsolation: true,
       // More info: https://v2.quasar.dev/quasar-cli-vite/developing-electron-apps/electron-preload-script
@@ -237,6 +244,7 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow?.focus();
   });
   app.whenReady().then(() => {
+    handleLessonMedia(filePath => lessonAccess.resolveFile(filePath, 'audio'));
     nativeTheme.themeSource = readThemeSource();
     nativeTheme.on('updated', () => {
       mainWindow?.setBackgroundColor(windowBackground());

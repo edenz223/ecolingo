@@ -41,9 +41,8 @@ export function parseRange(
   return start > end || start >= size ? 'unsatisfiable' : { start, end };
 }
 
-// Ranges are answered with bounded in-memory chunks; <audio> asks for the rest as it plays.
-// A streamed body left open by an aborted request (seeking, closing the window) can hang
-// Electron's shutdown.
+// Ranges are answered with bounded in-memory chunks; <audio> asks for the rest as it plays,
+// and no file stream outlives the requests that seeking keeps aborting.
 export const lessonMediaChunkBytes = 1024 * 1024;
 
 // Seeking in <audio> relies on range responses, which file:// gave for free.

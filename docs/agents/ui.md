@@ -95,7 +95,7 @@ Minimal desktop UI。单色中性色板，纯平不透明表面，微妙 1 px �
 
 ## Electron 窗口与标题栏
 
-- 应用图标（「影子」）：深色圆角方底 `#1c1917`，白色声波是原声，向右下错开的 `#2f9be8` 声波是跟读的影子。母版 `src-electron/icons/icon.svg`；`icon.png` / `icon.ico` / `icon.icns` 和 `public/icons/favicon-32x32.png` 由它导出，改图标先改母版再重新导出。标题栏「EcoLingo」左侧显示 16 px 图标（`favicon-32x32.png`）。
+- 应用图标（「影子」）：深色圆角方底 `#1c1917`，白色声波是原声，向右下错开的 `#2f9be8` 声波是跟读的影子。母版 `src-electron/electron-assets/icons/icon.svg`；`icon.png` / `icon.ico` / `icon.icns` 和 `public/icons/favicon-32x32.png` 由它导出，改图标先改母版再重新导出。标题栏「EcoLingo」左侧显示 16 px 图标（`favicon-32x32.png`）。
 - 右上角最小化、最大化/还原、关闭（关闭红色悬浮）；双击空白处切换最大化；保留原生阴影与缩放边框（`thickFrame: true`）。
 - 标题栏菜单：「文件」（打开文件夹）、「视图」（外观、字幕字号）、「帮助」（快捷键）。
 - 专注模式下标题栏及窗口按钮隐藏。

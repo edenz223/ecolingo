@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import jschardet from 'jschardet';
+import { detect } from 'jschardet';
 import type { Lesson, LessonFile } from '../src/types/recording';
 
 export interface ProcessedLessonsResult {
@@ -33,6 +33,23 @@ class LyricsFileStrategy extends FileStrategy {
     lesson.lyrics = file;
   }
 }
+
+// jschardet reports chardet's encoding names; these are the ones TextDecoder rejects.
+const decoderLabels: Record<string, string> = {
+  'utf-8-sig': 'utf-8',
+  'utf-16-be': 'utf-16be',
+  'utf-16-le': 'utf-16le',
+  cp932: 'shift_jis',
+  shift_jis_2004: 'shift_jis',
+  euc_jis_2004: 'euc-jp',
+  iso2022_jp_2: 'iso-2022-jp',
+  cp949: 'euc-kr',
+  euc_kr: 'euc-kr',
+  big5hkscs: 'big5',
+  cp874: 'windows-874',
+  'mac-roman': 'macintosh',
+  'mac-cyrillic': 'x-mac-cyrillic',
+};
 
 export class FileProcessor {
   strategies: FileStrategy[];
@@ -78,7 +95,14 @@ export class FileProcessor {
 
   readTextFile(filePath: string): string {
     const content = fs.readFileSync(filePath);
-    const encoding = jschardet.detect(content);
-    return new TextDecoder(encoding.encoding).decode(content);
+    // Encodings TextDecoder cannot decode fall back to UTF-8.
+    const encoding = detect(content).encoding?.toLowerCase() ?? 'utf-8';
+    let decoder: TextDecoder;
+    try {
+      decoder = new TextDecoder(decoderLabels[encoding] ?? encoding);
+    } catch {
+      decoder = new TextDecoder('utf-8');
+    }
+    return decoder.decode(content);
   }
 }

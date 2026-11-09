@@ -1,0 +1,16 @@
+{
+  "name": "ecolingo-electron",
+  "version": "1.0.0",
+  "description": "Electron main process dependencies; only `dependencies` ship in the packaged app.",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "jschardet": "^4.1.0",
+    "sql.js": "^1.15.2"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.11",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}

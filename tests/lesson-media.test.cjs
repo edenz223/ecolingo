@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { loadTs } = require('./helpers/load-ts.cjs');
+const { electronRequire, loadTs } = require('./helpers/load-ts.cjs');
 
 const urls = loadTs('src/utils/lesson-media.ts', { URL });
 const { parseRange, lessonMediaResponse, lessonMediaChunkBytes } = loadTs('src-electron/lesson-media.ts', {
-  require: id => (id === '../src/utils/lesson-media' ? urls : require(id)),
+  require: id => (id === '../src/utils/lesson-media' ? urls : electronRequire(id)),
   Response,
   Buffer,
 });

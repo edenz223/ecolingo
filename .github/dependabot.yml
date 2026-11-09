@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # Renderer and tooling.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # typescript-eslint supports TypeScript < 6.1.
+      - dependency-name: typescript
+        versions: ['>=6.1.0']
+
+  # Electron, electron-builder and the main-process dependencies.
+  - package-ecosystem: npm
+    directory: /src-electron
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

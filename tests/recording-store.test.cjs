@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { loadTs } = require('./helpers/load-ts.cjs');
+const { electronRequire, loadTs } = require('./helpers/load-ts.cjs');
 const { RecordingStore, lessonIdentity, createLessonIdentityCache } = loadTs('src-electron/recording-store.ts', {
-  require,
+  require: electronRequire,
   Buffer,
   console,
   setTimeout,

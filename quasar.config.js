@@ -1,9 +1,7 @@
-/* eslint-env node */
+// https://quasar.dev/quasar-cli-vite/quasar-config-file
+import { defineConfig } from '#q-app';
 
-// https://v2.quasar.dev/quasar-cli-vite/quasar-config-js
-const { configure } = require('quasar/wrappers');
-
-module.exports = configure(function () {
+export default defineConfig(() => {
   return {
     css: ['app.scss'],
 
@@ -11,9 +9,9 @@ module.exports = configure(function () {
 
     build: {
       target: {
-        // Electron 29 ships Chromium 122.
-        browser: ['chrome122'],
-        node: 'node20',
+        // Electron 45 ships Chromium 156 and Node 24.
+        browser: ['chrome156'],
+        node: 'node24',
       },
       vueRouterMode: 'hash',
     },
@@ -28,6 +26,7 @@ module.exports = configure(function () {
     electron: {
       inspectPort: 5858,
       bundler: 'builder',
+      // Paths below are relative to src-electron/, electron-builder's project folder.
       builder: {
         appId: 'com.edenz223.ecolingo',
         artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
@@ -35,11 +34,11 @@ module.exports = configure(function () {
         publish: null,
         win: {
           target: [{ target: 'portable', arch: ['x64'] }],
-          icon: 'src-electron/icons/icon.ico',
+          icon: 'electron-assets/icons/icon.ico',
         },
         mac: {
           target: [{ target: 'dmg', arch: ['arm64', 'x64'] }],
-          icon: 'src-electron/icons/icon.icns',
+          icon: 'electron-assets/icons/icon.icns',
           category: 'public.app-category.education',
           // No Developer ID yet: ad-hoc sign so Apple Silicon will launch it.
           identity: '-',
@@ -50,7 +49,7 @@ module.exports = configure(function () {
         },
         linux: {
           target: [{ target: 'AppImage', arch: ['x64'] }],
-          icon: 'src-electron/icons/icon.png',
+          icon: 'electron-assets/icons/icon.png',
           category: 'Education',
         },
       },

@@ -33,10 +33,10 @@
 
 ## 开发
 
-需要 Node 22.12+（见 `.nvmrc`）和 Yarn 1。
+需要 Node 22.22+（见 `.nvmrc`）和 Yarn 1。
 
 ```bash
-yarn            # 安装依赖
+yarn            # 安装依赖（含 src-electron/ 的主进程依赖）
 yarn dev        # Electron 开发模式
 yarn lint
 yarn typecheck  # vue-tsc 类型检查

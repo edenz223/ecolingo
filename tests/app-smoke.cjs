@@ -29,8 +29,11 @@ app.on('browser-window-created', (_event, win) => {
     run(win)
       .then(() => {
         console.log('PASS app: lesson access allowlist, lesson-media ranges and seeking, CSP');
-        // Close mid-playback like a user; electron-main must quit promptly (CI adds a timeout).
-        win.close();
+        // Close right after a seek, with a range request in flight, like a user would;
+        // electron-main must quit promptly (CI adds a timeout).
+        return win.webContents
+          .executeJavaScript(`document.querySelectorAll('.sentence-item')[20].click()`, true)
+          .then(() => win.close());
       })
       .catch(error => {
         console.error(error);

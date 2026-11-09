@@ -69,8 +69,10 @@ function runUiSmoke({ prefix, lessonName = '002 02', window = {}, switches = {} 
       console.error(error);
       process.exitCode = 1;
     } finally {
-      win.destroy();
-      app.exit(process.exitCode || 0);
+      // Exiting while the window is torn down abruptly can hang on an in-flight
+      // lesson-media request; close it like the app does, then exit.
+      win.once('closed', () => app.exit(process.exitCode || 0));
+      win.close();
     }
   });
 }

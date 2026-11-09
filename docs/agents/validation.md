@@ -1,12 +1,12 @@
 # 开发与验证
 
-命令以 `package.json` 为准。开发与 CI 使用 Node 22（`.nvmrc`）；Electron 45 内置 Node 24 / Chromium 156，主进程与渲染进程构建目标为 `node24` / `chrome156`。包管理器为 Yarn 1，只维护 `yarn.lock`。
+命令以 `package.json` 为准。开发与 CI 使用 Node 22（`.nvmrc`）；Electron 45 内置 Node 24 / Chromium 156，主进程与渲染进程构建目标为 `node24` / `chrome156`。包管理器为 Yarn 1：根目录 `package.json` / `yarn.lock` 放渲染进程与工具链依赖，`src-electron/package.json` / `yarn.lock` 放主进程依赖（`dependencies` 会被打进安装包）、Electron 与 electron-builder；根目录 `yarn` 的 `postinstall` 会安装后者并运行 `quasar prepare` 生成 `.quasar/tsconfig.json`。
 
 - `yarn dev`：启动 Electron 开发模式。
 - `yarn build`：构建并用 electron-builder 打包当前平台（Windows 便携版 exe、macOS dmg、Linux AppImage），输出到 `dist/electron/Packaged/`。
 - `yarn typecheck`：`vue-tsc --noEmit` 类型检查（含 `.vue`）。
 - `yarn test`：运行 `tests/*.test.cjs` 全部单元测试。
-- `yarn test:smoke`：Electron 冒烟测试（需图形环境，读取 `yarn build` 产物）。`tests/app-smoke.cjs` 启动真实主进程，验证课程文件白名单、`lesson-media` 协议的 Range 与跳句、CSP 无报错。
+- `yarn test:smoke`：Electron 冒烟测试（需图形环境，读取 `yarn build` 产物）。单独运行用 `yarn --cwd src-electron electron ../tests/<文件>`。`tests/app-smoke.cjs` 启动真实主进程，验证课程文件白名单、`lesson-media` 协议的 Range 与跳句、CSP 无报错。
 
 ## 按改动选择检查
 

@@ -1,28 +1,6 @@
 {
+  "extends": "./.quasar/tsconfig.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "paths": {
-      "*": ["./*"],
-      "src/*": ["./src/*"],
-      "app/*": ["./*"],
-      "components/*": ["./src/components/*"],
-      "layouts/*": ["./src/layouts/*"]
-    }
-  },
-  "include": [
-    "src/**/*",
-    "src-electron/**/*"
-  ],
-  "exclude": [
-    "dist",
-    ".quasar",
-    "node_modules"
-  ]
+    "strict": true
+  }
 }

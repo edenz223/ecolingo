@@ -334,8 +334,10 @@ export class Player {
     this.handleSentenceChange(sentence);
   }
 
-  handleSentenceClick(sentence: Sentence, event?: MouseEvent) {
-    if (event?.detail && event.detail > 1) return;
+  // QItem also emits click for Enter, so the event is not always a MouseEvent.
+  handleSentenceClick(sentence: Sentence, event?: Event) {
+    const clicks = (event as UIEvent | undefined)?.detail ?? 0;
+    if (clicks > 1) return;
     return this.clickSentence(sentence);
   }
 

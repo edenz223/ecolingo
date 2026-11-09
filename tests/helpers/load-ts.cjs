@@ -4,6 +4,8 @@ const vm = require('node:vm');
 const esbuild = require('esbuild');
 
 const root = path.join(__dirname, '../..');
+// Main-process dependencies are installed under src-electron/.
+const electronRequire = require('node:module').createRequire(path.join(root, 'src-electron/package.json'));
 
 function transpile(file, format) {
   return esbuild.transformSync(fs.readFileSync(path.join(root, file), 'utf8'), { loader: 'ts', format }).code;
@@ -24,4 +26,4 @@ function stripModule(file) {
     .replace(/^export \{[\s\S]*?\};?\r?\n/gm, '');
 }
 
-module.exports = { root, loadTs, stripModule };
+module.exports = { root, electronRequire, loadTs, stripModule };

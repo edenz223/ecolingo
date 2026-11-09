@@ -44,6 +44,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: yarn
+          cache-dependency-path: |
+            yarn.lock
+            src-electron/yarn.lock
       - run: yarn install --frozen-lockfile
       - run: yarn build
         env:

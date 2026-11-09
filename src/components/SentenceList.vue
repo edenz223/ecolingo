@@ -98,7 +98,7 @@ defineProps<{
   status?: PracticeStatus;
 }>();
 const emit = defineEmits<{
-  (event: 'sentence-click', sentence: Sentence, domEvent: MouseEvent): void;
+  (event: 'sentence-click', sentence: Sentence, domEvent: Event): void;
   (event: 'sentence-dblclick', sentence: Sentence): void;
   (event: 'play-recording', start: number): void;
   (event: 'compare', sentence: Sentence): void;

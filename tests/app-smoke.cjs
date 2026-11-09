@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { root, loadTs } = require('./helpers/load-ts.cjs');
 
 const fixtures = path.join(root, 'tests/fixtures');
@@ -44,7 +45,8 @@ app.on('browser-window-created', (_event, win) => {
 });
 app.on('will-quit', () => fs.rmSync(temp, { recursive: true, force: true }));
 
-require(path.join(root, 'dist/electron/UnPackaged/electron-main.js'));
+// The built main process is an ES module.
+import(pathToFileURL(path.join(root, 'dist/electron/UnPackaged/electron-main.js')).href);
 
 async function run(win) {
   const evaluate = source => win.webContents.executeJavaScript(source, true);

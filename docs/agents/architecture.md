@@ -1,7 +1,7 @@
 # 架构与实现
 
-- **前端**：Vue 3 + Composition API（`<script setup>`）、TypeScript、Quasar 2、Vite。
-- **桌面**：Electron（原生标题栏、系统菜单、`contextIsolation` + 沙箱）。
+- **前端**：Vue 3 + Composition API（`<script setup>`）、TypeScript、Quasar 2、Vite（`@quasar/app-vite` 3）。
+- **桌面**：Electron 45（原生标题栏、系统菜单、`contextIsolation` + 沙箱）。主进程打包为 ESM，preload 为 CommonJS（`electron-preload.cjs`），环境常量用 `import.meta.env.QUASAR_*`。
 - **音频**：Howler 播放课程音频；`MediaRecorder` + `getUserMedia` 录音。
 
 | 模块                               | 职责                                                                     |
@@ -28,6 +28,8 @@
 | `src-electron/recording-store.ts`  | SQLite 录音存储与原子写入                                                |
 | `src-electron/lesson-access.ts`    | 已打开课程文件白名单（字幕读取、录音身份、句数统计的路径校验）           |
 | `src-electron/lesson-media.ts`     | `lesson-media://` 协议：只提供白名单内的课程音频，支持 Range             |
+| `src-electron/package.json`        | 主进程运行时依赖（随应用打包）与 Electron / electron-builder             |
+| `src-electron/electron-assets/`    | 随应用打包的资源（窗口与安装包图标）                                     |
 | `quasar.config.js`                 | 构建和 electron-builder 打包配置                                         |
 | `.github/workflows/`               | CI 检查与按 tag 自动发布                                                 |
 

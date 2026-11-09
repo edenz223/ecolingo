@@ -5,42 +5,39 @@
   "productName": "EcoLingo",
   "author": "edenz223",
   "private": true,
+  "type": "module",
   "scripts": {
+    "postinstall": "yarn --cwd src-electron install --frozen-lockfile && quasar prepare --silent",
     "lint": "eslint --ext .js,.ts,.vue ./",
     "typecheck": "vue-tsc --noEmit",
     "test": "node --test tests/*.test.cjs",
-    "test:smoke": "electron tests/app-smoke.cjs && electron tests/voice-activity-smoke.cjs && electron tests/learning-ui-smoke.cjs && electron tests/visual-responsiveness-smoke.cjs",
+    "test:smoke": "yarn --cwd src-electron electron ../tests/app-smoke.cjs && yarn --cwd src-electron electron ../tests/voice-activity-smoke.cjs && yarn --cwd src-electron electron ../tests/learning-ui-smoke.cjs && yarn --cwd src-electron electron ../tests/visual-responsiveness-smoke.cjs",
     "dev": "quasar dev -m electron",
     "build": "quasar build --mode electron"
   },
   "dependencies": {
-    "@quasar/extras": "^1.16.4",
+    "@quasar/extras": "^2.1.0",
     "howler": "^2.2.4",
-    "jschardet": "^3.0.0",
-    "quasar": "^2.8.0",
-    "sql.js": "^1.14.2",
-    "vue": "^3.4.18",
-    "vue-router": "^4.0.12"
+    "quasar": "^2.35.2",
+    "vue": "^3.5.45",
+    "vue-router": "^5.4.0"
   },
   "devDependencies": {
-    "@quasar/app-vite": "^1.8.0",
+    "@quasar/app-vite": "^3.10.3",
     "@types/howler": "^2.2.13",
     "@types/node": "^24",
-    "@types/sql.js": "^1.4.11",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
-    "electron": "^45.2.3",
-    "electron-builder": "^26.18.1",
-    "esbuild": "0.14.51",
+    "esbuild": "^0.28.2",
     "eslint": "^8.11.0",
     "eslint-config-prettier": "^8.1.0",
     "eslint-plugin-vue": "^9.0.0",
     "prettier": "^2.5.1",
-    "typescript": "~5.7.3",
-    "vue-tsc": "^2.2.12"
+    "typescript": "~6.0.3",
+    "vue-tsc": "^3.3.14"
   },
   "engines": {
-    "node": ">=22.12",
+    "node": ">=22.22",
     "yarn": ">= 1.21.1"
   },
   "packageManager": "yarn@1.22.22"

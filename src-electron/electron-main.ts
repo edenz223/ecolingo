@@ -10,6 +10,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { resolveElectronAssetsPath } from '#q-app/electron/main';
 import { FileProcessor } from './fileSystem';
 import { RecordingStore, createLessonIdentityCache } from './recording-store';
 import { createLessonAccess } from './lesson-access';
@@ -190,7 +191,7 @@ function createWindow() {
    * Initial window options
    */
   mainWindow = new BrowserWindow({
-    icon: path.resolve(__dirname, 'icons/icon.png'), // tray icon
+    icon: resolveElectronAssetsPath('icons/icon.png'), // Windows and Linux
     title: 'EcoLingo',
     width: 1000,
     height: 600,
@@ -216,8 +217,8 @@ function createWindow() {
       backgroundThrottling: false,
       sandbox: true,
       contextIsolation: true,
-      // More info: https://v2.quasar.dev/quasar-cli-vite/developing-electron-apps/electron-preload-script
-      preload: path.resolve(__dirname, process.env.QUASAR_ELECTRON_PRELOAD as string),
+      // Sandboxed preload scripts must be CommonJS.
+      preload: path.join(import.meta.dirname, 'electron-preload.cjs'),
     },
     autoHideMenuBar: true,
   });
@@ -231,9 +232,13 @@ function createWindow() {
     mainWindow?.webContents.send('window:maximized-change', false);
   });
 
-  mainWindow.loadURL(process.env.APP_URL as string);
+  if (import.meta.env.QUASAR_DEV) {
+    mainWindow.loadURL(import.meta.env.QUASAR_APP_URL);
+  } else {
+    mainWindow.loadFile(path.join(import.meta.dirname, 'index.html'));
+  }
   mainWindow.once('ready-to-show', () => mainWindow?.show());
-  if (process.env.DEBUGGING) {
+  if (import.meta.env.QUASAR_DEBUG) {
     // if on DEV or Production with debug enabled
     mainWindow.webContents.openDevTools();
   } else {

@@ -26,6 +26,7 @@ jobs:
             src-electron/yarn.lock
       - run: yarn install --frozen-lockfile
       - run: yarn lint
+      - run: yarn format:check
       - run: yarn typecheck
       - run: yarn test
       # Packages an AppImage too, so packaging regressions show up here.

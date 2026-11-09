@@ -51,10 +51,8 @@ export class ZenCoordinator {
       setPhase: (phase: any) => {
         this.zenPhase.value = phase;
       },
-      save: (meta: RecordingMetadata, blob: Blob) =>
-        this.recorder.saveRecording(meta, blob),
-      preview: (clip: any, onComplete: any) =>
-        this.recorder.previewRecording(clip, onComplete),
+      save: (meta: RecordingMetadata, blob: Blob) => this.recorder.saveRecording(meta, blob),
+      preview: (clip: any, onComplete: any) => this.recorder.previewRecording(clip, onComplete),
       advance: () => {
         const next = this.player.completeSentence();
         if (!next) {
@@ -75,7 +73,7 @@ export class ZenCoordinator {
     if (
       !this.shadowingMode.value ||
       !this.player.sound.value ||
-      !practiceMethods.some((item) => item.id === method)
+      !practiceMethods.some(item => item.id === method)
     )
       return;
     this.player.stopCurrentPlayback();
@@ -117,7 +115,8 @@ export class ZenCoordinator {
       return;
     }
     const sentence = this.player.currentSentence.value;
-    if (!sentence || (!this.player.sound.value?.playing() && !this.recorder.previewClipId.value)) return;
+    if (!sentence || (!this.player.sound.value?.playing() && !this.recorder.previewClipId.value))
+      return;
 
     this.player.sound.value?.pause();
     if (this.player.stepTimerId) {

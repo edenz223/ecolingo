@@ -44,14 +44,16 @@ function readLastFolder(): string | undefined {
 }
 
 async function handleFolderOpen() {
+  const defaultPath = readLastFolder();
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
-    defaultPath: readLastFolder(),
+    ...(defaultPath && { defaultPath }),
   });
-  if (result.canceled) {
+  const [folder] = result.filePaths;
+  if (result.canceled || !folder) {
     return;
   }
-  loadLessonFolder(result.filePaths[0]);
+  loadLessonFolder(folder);
 }
 
 // Dropped items arrive as paths; a dropped file opens the folder that contains it.

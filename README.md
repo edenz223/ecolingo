@@ -39,6 +39,7 @@
 yarn            # 安装依赖（含 src-electron/ 的主进程依赖）
 yarn dev        # Electron 开发模式
 yarn lint
+yarn format:check # Prettier 格式检查（tests/ 除外）
 yarn typecheck  # vue-tsc 类型检查
 yarn test       # 单元测试
 yarn test:smoke # Electron 冒烟测试（需图形环境，先 yarn build）

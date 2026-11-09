@@ -1,13 +1,19 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <title><%= productName %></title>
 
-    <meta charset="utf-8">
+    <meta charset="utf-8" />
     <!-- Lesson audio comes from lesson-media: (src-electron/lesson-media.ts), recordings from blob: URLs. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self' blob: lesson-media:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-    <meta name="description" content="<%= productDescription %>">
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self' blob: lesson-media:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="description" content="<%= productDescription %>" />
+    <meta
+      name="viewport"
+      content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width"
+    />
   </head>
   <body>
     <!-- quasar:entry-point -->

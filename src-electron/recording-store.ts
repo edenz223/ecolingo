@@ -84,7 +84,7 @@ export class RecordingStore {
     this.db = new SQL.Database(fs.existsSync(this.index) ? fs.readFileSync(this.index) : undefined);
     if (
       fs.existsSync(this.index) &&
-      rows<{ user_version: number }>(this.db, 'PRAGMA user_version')[0].user_version !== 1
+      rows<{ user_version: number }>(this.db, 'PRAGMA user_version')[0]?.user_version !== 1
     ) {
       this.db.close();
       throw new Error('Unsupported recording database version.');
@@ -131,7 +131,8 @@ export class RecordingStore {
       'audio/mp4': 'm4a',
       'audio/wav': 'wav',
     };
-    return path.join(this.root, 'audio', `${clip.id}.${extensions[clip.mime.split(';')[0]]}`);
+    const [type = ''] = clip.mime.split(';');
+    return path.join(this.root, 'audio', `${clip.id}.${extensions[type]}`);
   }
 
   read(id: string): { bytes: Buffer; mime: string } {
@@ -139,9 +140,7 @@ export class RecordingStore {
     if (!clip) throw new Error('Recording not found.');
     const bytes = fs.readFileSync(this.audioPath(clip));
     if (bytes.length !== clip.size || hash(bytes) !== clip.checksum) {
-      throw new Error(
-        'Recording audio is missing or damaged. Please record this sentence again.'
-      );
+      throw new Error('Recording audio is missing or damaged. Please record this sentence again.');
     }
     return { bytes, mime: clip.mime };
   }
@@ -164,21 +163,18 @@ export class RecordingStore {
       this.db.run('BEGIN');
       atomicWrite(file, bytes);
       written = true;
-      this.db.run(
-        'INSERT INTO recordings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          clip.id,
-          clip.lessonId,
-          clip.lessonName,
-          clip.start,
-          clip.end ?? null,
-          clip.text,
-          clip.createdAt,
-          clip.mime,
-          clip.size,
-          clip.checksum,
-        ]
-      );
+      this.db.run('INSERT INTO recordings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        clip.id,
+        clip.lessonId,
+        clip.lessonName,
+        clip.start,
+        clip.end ?? null,
+        clip.text,
+        clip.createdAt,
+        clip.mime,
+        clip.size,
+        clip.checksum,
+      ]);
       this.db.run('COMMIT');
       atomicWrite(this.index, this.db.export());
       return clip;

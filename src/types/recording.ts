@@ -13,7 +13,7 @@ export interface RecordingMetadata {
   lessonId: string;
   lessonName: string;
   start: number;
-  end?: number;
+  end?: number | undefined;
   text: string;
   mime: string;
   duration?: number;

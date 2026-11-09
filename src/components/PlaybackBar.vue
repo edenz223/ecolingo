@@ -359,7 +359,9 @@ defineExpose({ closeMenus });
   background-color: #de5555 !important;
   color: #ffffff !important;
   box-shadow: 0 2px 8px rgba(222, 85, 85, 0.32) !important;
-  transition: background-color 200ms ease, box-shadow 200ms ease;
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease;
 }
 
 .primary-play--recording:hover {
@@ -381,7 +383,9 @@ defineExpose({ closeMenus });
 
 .focus-recording-enter-active,
 .focus-recording-leave-active {
-  transition: opacity 200ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    opacity 200ms ease,
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .focus-recording-enter-from,
@@ -406,7 +410,9 @@ defineExpose({ closeMenus });
 
 .shadowing-toggle {
   color: var(--ink);
-  transition: color 120ms ease, background-color 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
 }
 
 .shadowing-toggle--on {
@@ -420,7 +426,9 @@ defineExpose({ closeMenus });
   min-width: 28px;
   min-height: 28px;
   color: var(--ink-muted);
-  transition: color 120ms ease, background-color 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
 }
 
 .practice-method-btn:hover {

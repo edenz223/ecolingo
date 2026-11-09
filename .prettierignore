@@ -1,2 +1,4 @@
 /dist
 /.quasar
+# Tests keep their compact one-assertion-per-line style.
+/tests

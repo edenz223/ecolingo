@@ -16,8 +16,8 @@ export function lessonFolderName(lessons: Lesson[]): string {
 export function findResumeTarget(lessons: Lesson[], point: ResumePoint | null) {
   if (!point) return null;
   const index = lessons.findIndex(lesson => lessonKey(lesson) === point.lessonKey);
-  if (index < 0) return null;
-  return { index, lesson: lessons[index], sentenceIndex: point.sentenceIndex };
+  const lesson = lessons[index];
+  return lesson ? { index, lesson, sentenceIndex: point.sentenceIndex } : null;
 }
 
 export function filterLessons(lessons: Lesson[], query: string) {

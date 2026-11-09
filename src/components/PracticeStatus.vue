@@ -51,7 +51,9 @@ defineProps<{ status: PracticeStatus }>();
   border-radius: var(--radius-full);
   color: var(--ink-muted);
   white-space: nowrap;
-  transition: color 120ms ease, background-color 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
 }
 
 .practice-steps li.is-done {

@@ -35,7 +35,9 @@ defineProps<{ message: string }>();
 
 .action-hud-enter-active,
 .action-hud-leave-active {
-  transition: opacity 150ms ease, transform 150ms ease;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
 }
 
 .action-hud-enter-from,

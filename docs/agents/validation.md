@@ -33,4 +33,4 @@
 
 ## 格式化
 
-仅格式化改动文件：`npx prettier --write <文件路径...>`；避免整文件无关格式化。
+格式化改动文件：`npx prettier --write <文件路径...>`。仓库（`tests/` 除外，见 `.prettierignore`）已统一为 Prettier 3，CI 运行 `yarn format:check`。

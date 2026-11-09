@@ -102,6 +102,7 @@ const recorderCode = stripModule('src/modules/recorder.ts');
 const zenCode = stripModule('src/modules/zen.ts');
 const compareCode = stripModule('src/modules/compare.ts');
 const sessionCode = stripModule('src/modules/learning-session.ts');
+const { lessonMediaUrl } = loadTs('src/utils/lesson-media.ts', { URL });
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function setup({ deferredAccess = false, denied = false, saveFailure = false } = {}) {
   let access;
@@ -167,7 +168,7 @@ function setup({ deferredAccess = false, denied = false, saveFailure = false } =
       }
       return setTimeout(callback, delay);
     },
-    clearTimeout, URL,
+    clearTimeout, URL, lessonMediaUrl,
     countScroll: () => { scrolls++; },
   };
   vm.createContext(context);

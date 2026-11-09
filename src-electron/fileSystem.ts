@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import jschardet from 'jschardet';
-import type { LessonFile } from '../src/types/recording';
+import type { Lesson, LessonFile } from '../src/types/recording';
 
 export interface ProcessedLessonsResult {
-  completeLessons: any[];
+  completeLessons: Lesson[];
   incompleteLessons: string[];
 }
 

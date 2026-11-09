@@ -3,6 +3,7 @@ import { ref, type Ref } from 'vue';
 import { Howl } from 'howler';
 import type { Sentence } from '../types/subtitles';
 import type { Lesson } from '../types/recording';
+import { lessonMediaUrl } from '../utils/lesson-media';
 import { parseLRC, parseSRT } from '../utils/lyrics-util';
 
 export interface PlayerCallbacks {
@@ -142,7 +143,7 @@ export class Player {
   ) {
     const sound = new Howl({
       preload: false,
-      src: [audioFilePath],
+      src: [lessonMediaUrl(audioFilePath)],
       html5: true,
       format: ['mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a'],
       rate: this.playbackRate.value,

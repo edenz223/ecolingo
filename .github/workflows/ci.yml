@@ -31,6 +31,8 @@ jobs:
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       # The smoke tests maximize the window, which needs a window manager and a screen wider than 1100 px.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fluxbox
+      - name: App smoke test
+        run: xvfb-run --auto-servernum npx electron tests/app-smoke.cjs
       - name: Voice activity smoke test
         run: xvfb-run --auto-servernum npx electron tests/voice-activity-smoke.cjs
       # These still assert the UI from before the redesign; report them without blocking until updated.

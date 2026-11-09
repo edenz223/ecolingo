@@ -26,6 +26,8 @@
 | `src-electron/electron-preload.ts` | 强类型 `window.fileAPI` 桥接                                             |
 | `src-electron/fileSystem.ts`       | 音频/字幕配对与编码检测                                                  |
 | `src-electron/recording-store.ts`  | SQLite 录音存储与原子写入                                                |
+| `src-electron/lesson-access.ts`    | 已打开课程文件白名单（字幕读取、录音身份、句数统计的路径校验）           |
+| `src-electron/lesson-media.ts`     | `lesson-media://` 协议：只提供白名单内的课程音频，支持 Range             |
 | `quasar.config.js`                 | 构建和 electron-builder 打包配置                                         |
 | `.github/workflows/`               | CI 检查与按 tag 自动发布                                                 |
 
@@ -37,5 +39,7 @@
 - Howler 的 `playing()` 不是响应式；需要随播放状态刷新的视图读取 `player.playbackRevision`（`learning-session.isPlaybackActive()` 已处理）。
 
 - 文件系统操作在 Electron 主进程，通过 preload 暴露窄范围方法；不暴露原始 IPC 或 Node API。
+- 渲染进程传来的路径一律视为不可信：只接受主进程扫描文件夹时得到的课程文件（`lesson-access.ts`），新增读文件的 IPC 也须经它校验。
+- 窗口保持 `webSecurity`、沙箱和 `index.html` 中的 CSP。课程音频用 `lessonMediaUrl()`（`src/utils/lesson-media.ts`）生成 `lesson-media:` 地址，不用 `file://`；录音回放用 `blob:`。新增资源来源时同步修改 CSP。
 - 窗口使用原生标题栏与系统菜单，保持可调整大小和最大化。
 - 格式遵循仓库的 `.editorconfig`、`.prettierrc`、`.eslintrc.cjs`。

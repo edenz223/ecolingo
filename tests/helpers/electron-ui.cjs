@@ -3,9 +3,16 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { root } = require('./load-ts.cjs');
+const { root, loadTs } = require('./load-ts.cjs');
 
 const indexHtml = path.join(root, 'dist/electron/UnPackaged/index.html');
+const fixtures = path.join(root, 'tests/fixtures');
+const lessonMediaUrls = loadTs('src/utils/lesson-media.ts', { URL });
+const lessonMedia = loadTs('src-electron/lesson-media.ts', {
+  require: id => (id === '../src/utils/lesson-media' ? lessonMediaUrls : require(id)),
+  Response,
+  ReadableStream,
+});
 
 function runUiSmoke({ prefix, lessonName = '002 02', window = {}, switches = {} }, body) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -13,11 +20,12 @@ function runUiSmoke({ prefix, lessonName = '002 02', window = {}, switches = {} 
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
   for (const [name, value] of Object.entries(switches)) app.commandLine.appendSwitch(name, value);
+  lessonMedia.registerLessonMediaScheme();
   const preload = path.join(temp, 'preload.cjs');
   fs.writeFileSync(preload, `
     const { contextBridge } = require('electron');
     const fs = require('node:fs');
-    const folder = ${JSON.stringify(path.join(root, 'tests/fixtures'))};
+    const folder = ${JSON.stringify(fixtures)};
     let selected;
     const lesson = { name: ${JSON.stringify(lessonName)}, audio: { path: folder, name: '002 02.mp3' }, lyrics: { path: folder, name: '002 02.lrc' } };
     contextBridge.exposeInMainWorld('fileAPI', {
@@ -32,11 +40,15 @@ function runUiSmoke({ prefix, lessonName = '002 02', window = {}, switches = {} 
   `);
 
   app.whenReady().then(async () => {
+    lessonMedia.handleLessonMedia(filePath => {
+      if (path.dirname(filePath) !== fixtures) throw new Error('Not a fixture lesson');
+      return filePath;
+    });
     const win = new BrowserWindow({
       show: false, width: 1100, height: 800, ...window,
       frame: true, resizable: true, maximizable: true, thickFrame: true,
       titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#5c6b77', height: 34 },
-      webPreferences: { preload, sandbox: false, contextIsolation: true, webSecurity: false, backgroundThrottling: false, offscreen: true },
+      webPreferences: { preload, sandbox: false, contextIsolation: true, backgroundThrottling: false, offscreen: true },
     });
     win.webContents.setAudioMuted(true);
     const evaluate = (source) => win.webContents.executeJavaScript(source).catch(error => { throw new Error(source + ': ' + error.message); });

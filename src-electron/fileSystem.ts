@@ -16,7 +16,7 @@ abstract class FileStrategy {
 class AudioFileStrategy extends FileStrategy {
   isMatch(file: fs.Dirent): boolean {
     const audioExtensions = ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'];
-    return audioExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
+    return audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
   }
 
   process(lesson: Record<string, any>, file: LessonFile): void {
@@ -62,13 +62,13 @@ export class FileProcessor {
     // Natural order so "2" sorts before "10"; folders and unrelated files are ignored.
     const files = fs
       .readdirSync(folderPath, { withFileTypes: true })
-      .filter((file) => file.isFile())
+      .filter(file => file.isFile())
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     const lessonMap = new Map<string, Record<string, any>>();
 
     for (const file of files) {
-      const strategy = this.strategies.find((item) => item.isMatch(file));
+      const strategy = this.strategies.find(item => item.isMatch(file));
       if (!strategy) continue;
       const fileName = path.parse(file.name).name;
       let lesson = lessonMap.get(fileName);

@@ -9,6 +9,7 @@
   "scripts": {
     "postinstall": "yarn --cwd src-electron install --frozen-lockfile && quasar prepare --silent",
     "lint": "eslint .",
+    "format:check": "prettier --check .",
     "typecheck": "vue-tsc --noEmit",
     "test": "node --test tests/*.test.cjs",
     "test:smoke": "yarn --cwd src-electron electron ../tests/app-smoke.cjs && yarn --cwd src-electron electron ../tests/voice-activity-smoke.cjs && yarn --cwd src-electron electron ../tests/learning-ui-smoke.cjs && yarn --cwd src-electron electron ../tests/visual-responsiveness-smoke.cjs",

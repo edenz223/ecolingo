@@ -38,7 +38,12 @@ export function normalizeSettings(value: unknown): UserSettings {
   } else if (obj.loopMode === undefined && obj.repeatOne === true) {
     settings.loopMode = 'one';
   }
-  if (typeof obj.repeatCount === 'number' && Number.isInteger(obj.repeatCount) && obj.repeatCount >= 0 && obj.repeatCount <= 99) {
+  if (
+    typeof obj.repeatCount === 'number' &&
+    Number.isInteger(obj.repeatCount) &&
+    obj.repeatCount >= 0 &&
+    obj.repeatCount <= 99
+  ) {
     settings.repeatCount = obj.repeatCount;
   }
   settings.resume = normalizeResumePoint(obj.resume);

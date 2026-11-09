@@ -62,7 +62,9 @@
             class="sentence-recording-button"
             :icon="previewClipId === recordings[s.start]?.id ? 'stop_circle' : 'play_circle'"
             :color="previewClipId === recordings[s.start]?.id ? 'primary' : undefined"
-            :aria-label="previewClipId === recordings[s.start]?.id ? '停止回放' : '播放此句最新录音'"
+            :aria-label="
+              previewClipId === recordings[s.start]?.id ? '停止回放' : '播放此句最新录音'
+            "
             @click.stop="emit('play-recording', s.start)"
           >
             <HintTooltip>{{

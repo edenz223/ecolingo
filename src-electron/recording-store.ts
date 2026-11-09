@@ -140,9 +140,7 @@ export class RecordingStore {
     if (!clip) throw new Error('Recording not found.');
     const bytes = fs.readFileSync(this.audioPath(clip));
     if (bytes.length !== clip.size || hash(bytes) !== clip.checksum) {
-      throw new Error(
-        'Recording audio is missing or damaged. Please record this sentence again.'
-      );
+      throw new Error('Recording audio is missing or damaged. Please record this sentence again.');
     }
     return { bytes, mime: clip.mime };
   }
@@ -165,21 +163,18 @@ export class RecordingStore {
       this.db.run('BEGIN');
       atomicWrite(file, bytes);
       written = true;
-      this.db.run(
-        'INSERT INTO recordings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          clip.id,
-          clip.lessonId,
-          clip.lessonName,
-          clip.start,
-          clip.end ?? null,
-          clip.text,
-          clip.createdAt,
-          clip.mime,
-          clip.size,
-          clip.checksum,
-        ]
-      );
+      this.db.run('INSERT INTO recordings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        clip.id,
+        clip.lessonId,
+        clip.lessonName,
+        clip.start,
+        clip.end ?? null,
+        clip.text,
+        clip.createdAt,
+        clip.mime,
+        clip.size,
+        clip.checksum,
+      ]);
       this.db.run('COMMIT');
       atomicWrite(this.index, this.db.export());
       return clip;

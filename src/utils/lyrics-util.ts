@@ -4,14 +4,12 @@ export function parseLRC(lrcContent: string): Sentence[] {
   const lines = lrcContent.split('\n');
   const sentences: Sentence[] = [];
 
-  lines.forEach((line) => {
+  lines.forEach(line => {
     const match = line.trim().match(/^\[(\d{2}):(\d{2}\.\d{2,3})\](.*)$/);
     if (match) {
       const [, minutes = '', seconds = '', content = ''] = match;
       const start = parseFloat(minutes) * 60 + parseFloat(seconds);
-      const text = content.includes('^')
-        ? content.replace('^', ' - ')
-        : content;
+      const text = content.includes('^') ? content.replace('^', ' - ') : content;
       if (!text.trim() || isEntireSentenceBracketed(text)) return;
       sentences.push({ start, text });
     }
@@ -78,5 +76,7 @@ export function isEntireSentenceBracketed(text: string): boolean {
 function timeToSeconds(timeString: string): number {
   const [hours, minutes, seconds] = timeString.split(':');
   if (hours === undefined || minutes === undefined || seconds === undefined) return NaN;
-  return parseFloat(hours) * 3600 + parseFloat(minutes) * 60 + parseFloat(seconds.replace(',', '.'));
+  return (
+    parseFloat(hours) * 3600 + parseFloat(minutes) * 60 + parseFloat(seconds.replace(',', '.'))
+  );
 }

@@ -44,4 +44,4 @@
 - 渲染进程传来的路径一律视为不可信：只接受主进程扫描文件夹时得到的课程文件（`lesson-access.ts`），新增读文件的 IPC 也须经它校验。
 - 窗口保持 `webSecurity`、沙箱和 `index.html` 中的 CSP。课程音频用 `lessonMediaUrl()`（`src/utils/lesson-media.ts`）生成 `lesson-media:` 地址，不用 `file://`；录音回放用 `blob:`。新增资源来源时同步修改 CSP。
 - 窗口使用原生标题栏与系统菜单，保持可调整大小和最大化。
-- 格式遵循仓库的 `.editorconfig`、`.prettierrc`、`.eslintrc.cjs`。
+- 格式遵循仓库的 `.editorconfig`、`.prettierrc`（Prettier 3）、`eslint.config.js`（ESLint 10 flat config，也检查 `tests/*.cjs`）。

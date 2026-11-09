@@ -20,8 +20,8 @@ app.disableHardwareAcceleration();
 
 const pageErrors = [];
 app.on('browser-window-created', (_event, win) => {
-  win.webContents.on('console-message', (_e, level, message) => {
-    if (level >= 3 || /Content Security Policy|Electron Security Warning/i.test(message)) {
+  win.webContents.on('console-message', ({ level, message }) => {
+    if (level === 'error' || /Content Security Policy|Electron Security Warning/i.test(message)) {
       pageErrors.push(message);
     }
   });
@@ -69,6 +69,8 @@ async function run(win) {
 
   assert.equal(await evaluate(`window.fileAPI.openFolderPath(${JSON.stringify(fixtures)})`), true);
   await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
+  // The next folder dialog starts here instead of Downloads.
+  assert.equal(JSON.parse(fs.readFileSync(path.join(temp, 'last-folder.json'), 'utf8')).folder, fixtures);
 
   assert.match(await evaluate(`window.fileAPI.readTextFile(${JSON.stringify(lyricsPath)})`), /^\[00:06\.39\]/);
   for (const target of [path.join(root, 'package.json'), audioPath, path.join(fixtures, '..', 'app-smoke.cjs')]) {

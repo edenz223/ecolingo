@@ -30,15 +30,22 @@ const lessonAccess = createLessonAccess();
 
 let mainWindow: BrowserWindow | null = null;
 
+// Dialogs open in Downloads unless given a path, so start from the last lesson folder.
+const lastFolderFile = () => path.join(app.getPath('userData'), 'last-folder.json');
+
+function readLastFolder(): string | undefined {
+  try {
+    const { folder } = JSON.parse(fs.readFileSync(lastFolderFile(), 'utf8'));
+    return typeof folder === 'string' && fs.existsSync(folder) ? folder : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function handleFolderOpen() {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
-    filters: [
-      {
-        name: 'Audio Files',
-        extensions: ['mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a'],
-      },
-    ],
+    defaultPath: readLastFolder(),
   });
   if (result.canceled) {
     return;
@@ -73,6 +80,11 @@ function loadLessonFolder(folderPath: string) {
 
   lessonAccess.allowLessons(completeLessons);
   mainWindow?.webContents.send('folder-selected', completeLessons);
+  try {
+    fs.writeFileSync(lastFolderFile(), JSON.stringify({ folder: folderPath }));
+  } catch {
+    // Only the next dialog's starting folder depends on this.
+  }
 }
 
 function readTextFile(_event: unknown, filePath: unknown) {

@@ -11,9 +11,9 @@ module.exports = configure(function () {
 
     build: {
       target: {
-        // Electron 29 ships Chromium 122.
-        browser: ['chrome122'],
-        node: 'node20',
+        // Electron 45 ships Chromium 156 and Node 24.
+        browser: ['chrome156'],
+        node: 'node24',
       },
       vueRouterMode: 'hash',
     },

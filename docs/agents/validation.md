@@ -1,6 +1,6 @@
 # 开发与验证
 
-命令以 `package.json` 为准。开发与 CI 使用 Node 22（`.nvmrc`）；Electron 29 内置 Node 20，主进程构建目标仍为 `node20`。包管理器为 Yarn 1，只维护 `yarn.lock`。
+命令以 `package.json` 为准。开发与 CI 使用 Node 22（`.nvmrc`）；Electron 45 内置 Node 24 / Chromium 156，主进程与渲染进程构建目标为 `node24` / `chrome156`。包管理器为 Yarn 1，只维护 `yarn.lock`。
 
 - `yarn dev`：启动 Electron 开发模式。
 - `yarn build`：构建并用 electron-builder 打包当前平台（Windows 便携版 exe、macOS dmg、Linux AppImage），输出到 `dist/electron/Packaged/`。

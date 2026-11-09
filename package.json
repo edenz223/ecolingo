@@ -25,11 +25,11 @@
   "devDependencies": {
     "@quasar/app-vite": "^1.8.0",
     "@types/howler": "^2.2.13",
-    "@types/node": "^22.20.2",
+    "@types/node": "^24",
     "@types/sql.js": "^1.4.11",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
-    "electron": "^29.1.5",
+    "electron": "^45.2.3",
     "electron-builder": "^26.18.1",
     "esbuild": "0.14.51",
     "eslint": "^8.11.0",

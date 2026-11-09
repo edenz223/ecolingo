@@ -18,6 +18,7 @@ runUiSmoke({
     await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
     await evaluate(`document.querySelector('.lesson-item').click()`);
     await waitFor(`Boolean(document.querySelector('.sentence-item'))`);
+    await waitFor(`Boolean(document.querySelector('[aria-label="暂停"]'))`);
     await evaluate(`document.querySelector('[aria-label="暂停"]').click()`);
     await new Promise((r) => setTimeout(r, 250));
 

@@ -6,10 +6,10 @@ const path = require('node:path');
 const { loadTs } = require('./helpers/load-ts.cjs');
 
 const urls = loadTs('src/utils/lesson-media.ts', { URL });
-const { parseRange, lessonMediaResponse } = loadTs('src-electron/lesson-media.ts', {
+const { parseRange, lessonMediaResponse, lessonMediaChunkBytes } = loadTs('src-electron/lesson-media.ts', {
   require: id => (id === '../src/utils/lesson-media' ? urls : require(id)),
   Response,
-  ReadableStream,
+  Buffer,
 });
 
 test('lesson media URLs round-trip POSIX and Windows paths', () => {
@@ -41,32 +41,45 @@ test('responses serve whole files and ranges with audio headers', async () => {
     const file = path.join(dir, 'Lesson.MP3');
     fs.writeFileSync(file, Buffer.from('0123456789'));
 
-    const whole = lessonMediaResponse(file, null);
+    const whole = await lessonMediaResponse(file, null);
     assert.equal(whole.status, 200);
     assert.equal(whole.headers.get('content-type'), 'audio/mpeg');
     assert.equal(whole.headers.get('accept-ranges'), 'bytes');
     assert.equal(whole.headers.get('content-length'), '10');
     assert.equal(await whole.text(), '0123456789');
 
-    const part = lessonMediaResponse(file, 'bytes=2-5');
+    const part = await lessonMediaResponse(file, 'bytes=2-5');
     assert.equal(part.status, 206);
     assert.equal(part.headers.get('content-range'), 'bytes 2-5/10');
     assert.equal(part.headers.get('content-length'), '4');
     assert.equal(await part.text(), '2345');
 
-    const tail = lessonMediaResponse(file, 'bytes=-3');
+    const tail = await lessonMediaResponse(file, 'bytes=-3');
     assert.equal(await tail.text(), '789');
 
-    const beyond = lessonMediaResponse(file, 'bytes=10-');
+    const beyond = await lessonMediaResponse(file, 'bytes=10-');
     assert.equal(beyond.status, 416);
     assert.equal(beyond.headers.get('content-range'), 'bytes */10');
 
     const empty = path.join(dir, 'empty.m4a');
     fs.writeFileSync(empty, '');
-    const none = lessonMediaResponse(empty, null);
+    const none = await lessonMediaResponse(empty, null);
     assert.equal(none.status, 200);
     assert.equal(none.headers.get('content-type'), 'audio/mp4');
     assert.equal(await none.text(), '');
+
+    // Open-ended ranges get one bounded chunk; the player requests the rest.
+    const large = path.join(dir, 'long.flac');
+    const bytes = Buffer.alloc(lessonMediaChunkBytes + 10, 7);
+    bytes[lessonMediaChunkBytes] = 9;
+    fs.writeFileSync(large, bytes);
+    const first = await lessonMediaResponse(large, 'bytes=0-');
+    assert.equal(first.status, 206);
+    assert.equal(first.headers.get('content-range'), `bytes 0-${lessonMediaChunkBytes - 1}/${bytes.length}`);
+    assert.equal((await first.arrayBuffer()).byteLength, lessonMediaChunkBytes);
+    const rest = await lessonMediaResponse(large, `bytes=${lessonMediaChunkBytes}-`);
+    assert.equal(rest.headers.get('content-range'), `bytes ${lessonMediaChunkBytes}-${bytes.length - 1}/${bytes.length}`);
+    assert.deepEqual([...new Uint8Array(await rest.arrayBuffer())], [9, ...Array(9).fill(7)]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

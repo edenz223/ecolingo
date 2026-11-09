@@ -27,17 +27,19 @@ app.on('browser-window-created', (_event, win) => {
   });
   win.webContents.once('did-finish-load', () => {
     run(win)
-      .then(() => console.log('PASS app: lesson access allowlist, lesson-media ranges and seeking, CSP'))
+      .then(() => {
+        console.log('PASS app: lesson access allowlist, lesson-media ranges and seeking, CSP');
+        // Close mid-playback like a user; electron-main must quit promptly (CI adds a timeout).
+        win.close();
+      })
       .catch(error => {
         console.error(error);
-        process.exitCode = 1;
-      })
-      .finally(() => {
         fs.rmSync(temp, { recursive: true, force: true });
-        app.exit(process.exitCode || 0);
+        app.exit(1);
       });
   });
 });
+app.on('will-quit', () => fs.rmSync(temp, { recursive: true, force: true }));
 
 require(path.join(root, 'dist/electron/UnPackaged/electron-main.js'));
 
@@ -93,6 +95,7 @@ async function run(win) {
   await waitFor(`Howler._howls.at(-1)._sounds[0]._node.currentTime > ${start + 0.3}`);
   assert.equal(await evaluate(`${item}.classList.contains('sentence-item--active')`), true);
   assert.equal(await evaluate(`Boolean(document.querySelector('.q-dialog'))`), false);
+  assert.equal(await evaluate(`Boolean(document.querySelector('[aria-label="暂停"]'))`), true);
 
   assert.deepEqual(pageErrors, []);
 }

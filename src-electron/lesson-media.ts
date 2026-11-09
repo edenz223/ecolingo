@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { Readable } from 'stream';
 import { protocol } from 'electron';
 import { lessonMediaPath, lessonMediaScheme } from '../src/utils/lesson-media';
 
@@ -42,9 +41,17 @@ export function parseRange(
   return start > end || start >= size ? 'unsatisfiable' : { start, end };
 }
 
+// Ranges are answered with bounded in-memory chunks; <audio> asks for the rest as it plays.
+// A streamed body left open by an aborted request (seeking, closing the window) can hang
+// Electron's shutdown.
+export const lessonMediaChunkBytes = 1024 * 1024;
+
 // Seeking in <audio> relies on range responses, which file:// gave for free.
-export function lessonMediaResponse(filePath: string, rangeHeader: string | null): Response {
-  const size = fs.statSync(filePath).size;
+export async function lessonMediaResponse(
+  filePath: string,
+  rangeHeader: string | null
+): Promise<Response> {
+  const { size } = await fs.promises.stat(filePath);
   const headers: Record<string, string> = {
     'Content-Type': mimeTypes[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream',
     'Accept-Ranges': 'bytes',
@@ -53,19 +60,30 @@ export function lessonMediaResponse(filePath: string, rangeHeader: string | null
   if (range === 'unsatisfiable') {
     return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
   }
-  if (size === 0) return new Response(null, { status: 200, headers });
-  const { start, end } = range ?? { start: 0, end: size - 1 };
-  headers['Content-Length'] = String(end - start + 1);
-  if (range) headers['Content-Range'] = `bytes ${start}-${end}/${size}`;
-  const body = Readable.toWeb(fs.createReadStream(filePath, { start, end })) as ReadableStream;
-  return new Response(body, { status: range ? 206 : 200, headers });
+  if (!range) {
+    const body = await fs.promises.readFile(filePath);
+    headers['Content-Length'] = String(body.length);
+    return new Response(body, { status: 200, headers });
+  }
+  const { start } = range;
+  const end = Math.min(range.end, start + lessonMediaChunkBytes - 1);
+  const body = Buffer.alloc(end - start + 1);
+  const file = await fs.promises.open(filePath);
+  try {
+    await file.read(body, 0, body.length, start);
+  } finally {
+    await file.close();
+  }
+  headers['Content-Length'] = String(body.length);
+  headers['Content-Range'] = `bytes ${start}-${end}/${size}`;
+  return new Response(body, { status: 206, headers });
 }
 
 export function handleLessonMedia(resolveAudio: (filePath: string) => string) {
-  protocol.handle(lessonMediaScheme, request => {
+  protocol.handle(lessonMediaScheme, async request => {
     try {
       const filePath = resolveAudio(lessonMediaPath(request.url));
-      return lessonMediaResponse(filePath, request.headers.get('range'));
+      return await lessonMediaResponse(filePath, request.headers.get('range'));
     } catch {
       return new Response(null, { status: 404 });
     }

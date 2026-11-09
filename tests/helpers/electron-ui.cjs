@@ -11,7 +11,7 @@ const lessonMediaUrls = loadTs('src/utils/lesson-media.ts', { URL });
 const lessonMedia = loadTs('src-electron/lesson-media.ts', {
   require: id => (id === '../src/utils/lesson-media' ? lessonMediaUrls : require(id)),
   Response,
-  ReadableStream,
+  Buffer,
 });
 
 function runUiSmoke({ prefix, lessonName = '002 02', window = {}, switches = {} }, body) {

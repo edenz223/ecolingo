@@ -46,8 +46,8 @@ function runUiSmoke({ prefix, lessonName = '002 02', window = {}, switches = {} 
     });
     const win = new BrowserWindow({
       show: false, width: 1100, height: 800, ...window,
-      frame: true, resizable: true, maximizable: true, thickFrame: true,
-      titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#5c6b77', height: 34 },
+      // Frameless with the app's own title bar, as electron-main creates it on Windows and Linux.
+      frame: false, resizable: true, maximizable: true, thickFrame: true,
       webPreferences: { preload, sandbox: false, contextIsolation: true, backgroundThrottling: false, offscreen: true },
     });
     win.webContents.setAudioMuted(true);

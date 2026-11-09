@@ -14,6 +14,7 @@ export default defineConfig(() => {
         node: 'node24',
       },
       vueRouterMode: 'hash',
+      typescript: { strict: true },
     },
 
     framework: {

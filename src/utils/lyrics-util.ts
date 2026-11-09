@@ -7,7 +7,7 @@ export function parseLRC(lrcContent: string): Sentence[] {
   lines.forEach((line) => {
     const match = line.trim().match(/^\[(\d{2}):(\d{2}\.\d{2,3})\](.*)$/);
     if (match) {
-      const [, minutes, seconds, content] = match;
+      const [, minutes = '', seconds = '', content = ''] = match;
       const start = parseFloat(minutes) * 60 + parseFloat(seconds);
       const text = content.includes('^')
         ? content.replace('^', ' - ')
@@ -17,9 +17,10 @@ export function parseLRC(lrcContent: string): Sentence[] {
     }
   });
 
-  for (let i = 0; i < sentences.length - 1; i++) {
-    sentences[i].end = sentences[i + 1].start;
-  }
+  sentences.forEach((sentence, i) => {
+    const next = sentences[i + 1];
+    if (next) sentence.end = next.start;
+  });
   return sentences;
 }
 
@@ -29,7 +30,9 @@ export function parseSRT(content: string): Sentence[] {
   for (const block of blocks) {
     const [, time, ...textLines] = block.split(/\r?\n/);
     if (!time || !time.includes(' --> ')) continue;
-    const [startTime, endTime] = time.split(' --> ').map(timeToSeconds);
+    const [startTime = NaN, endTime = NaN] = time.split(' --> ').map(timeToSeconds);
+    // A malformed timestamp drops that cue rather than the whole lesson.
+    if (Number.isNaN(startTime) || Number.isNaN(endTime)) continue;
     const text = textLines.join(' ');
     if (!text.trim() || isEntireSentenceBracketed(text)) continue;
     sentences.push({
@@ -54,13 +57,15 @@ export function isEntireSentenceBracketed(text: string): boolean {
     '〔': '〕',
   };
   const closingBrackets = new Set(Object.values(pairs));
-  if (!pairs[value[0]] || value.at(-1) !== pairs[value[0]]) return false;
+  const first = value.charAt(0);
+  if (!pairs[first] || value.at(-1) !== pairs[first]) return false;
 
   const stack: string[] = [];
   for (let index = 0; index < value.length; index++) {
-    const character = value[index];
-    if (pairs[character]) {
-      stack.push(pairs[character]);
+    const character = value.charAt(index);
+    const closing = pairs[character];
+    if (closing) {
+      stack.push(closing);
     } else if (closingBrackets.has(character)) {
       if (stack.pop() !== character) return false;
       if (!stack.length && index !== value.length - 1) return false;
@@ -69,11 +74,9 @@ export function isEntireSentenceBracketed(text: string): boolean {
   return stack.length === 0;
 }
 
+// "HH:MM:SS,mmm"; anything else is NaN.
 function timeToSeconds(timeString: string): number {
   const [hours, minutes, seconds] = timeString.split(':');
-  return (
-    parseFloat(hours) * 3600 +
-    parseFloat(minutes) * 60 +
-    parseFloat(seconds.replace(',', '.'))
-  );
+  if (hours === undefined || minutes === undefined || seconds === undefined) return NaN;
+  return parseFloat(hours) * 3600 + parseFloat(minutes) * 60 + parseFloat(seconds.replace(',', '.'));
 }

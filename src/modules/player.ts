@@ -150,16 +150,15 @@ export class Player {
       onload: () => {
         if (sessionId !== this.loadSessionId) return;
         this.callbacks.onLoadingChange?.(false);
-        if (sentences.length > 0) {
-          sentences[sentences.length - 1].end = sound.duration();
-        }
+        const last = sentences.at(-1);
+        if (last) last.end = sound.duration();
         this.pendingSound = null;
         this.sound.value = sound;
         this.parsedSentences.value = sentences;
         // Start at the target directly: a second play() right after this one would
         // interrupt the HTML5 audio element and surface as a playerror.
-        const first = sentences.find(sentence => sentence.start === startAt) || sentences[0];
-        this.clickSentence(first);
+        const first = sentences.find(sentence => sentence.start === startAt) ?? sentences[0];
+        if (first) this.clickSentence(first);
         onReady?.();
       },
       onloaderror: (id: unknown, error: unknown) => {
@@ -282,8 +281,7 @@ export class Player {
   findCurrentSentence(currentTime: number): Sentence | undefined {
     const sentences = this.parsedSentences.value;
     const currentSentence = sentences.find((sentence, index) => {
-      const prevEnd =
-        index > 0 && sentences[index - 1].end !== undefined ? sentences[index - 1].end! : 0;
+      const prevEnd = sentences[index - 1]?.end ?? 0;
       const end = sentence.end !== undefined ? sentence.end : Infinity;
       return currentTime >= prevEnd && currentTime < end;
     });

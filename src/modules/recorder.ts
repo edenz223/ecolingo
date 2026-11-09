@@ -302,8 +302,8 @@ export class RecorderManager {
     context?: {
       sessionId: number;
       sentence: Sentence | null;
-      zenSession?: number;
-      zenPhase?: string | null;
+      zenSession?: number | undefined;
+      zenPhase?: string | null | undefined;
     }
   ) {
     if (!this.isRecording.value || this.completedShadow) return;

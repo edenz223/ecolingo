@@ -36,6 +36,15 @@ test('SRT skips empty and whitespace cues while preserving valid cue times', () 
   ]);
 });
 
+test('SRT drops cues with malformed timestamps instead of failing the lesson', () => {
+  const sentences = scope.parseSRT([
+    '1\n00:01,000 --> 00:00:02,000\nMissing hours',
+    '2\n00:00:02,000 --> 00:00:xx,000\nNot a number',
+    '3\n00:00:03,000 --> 00:00:04,000\nKept',
+  ].join('\n\n'));
+  assert.deepEqual(JSON.parse(JSON.stringify(sentences)), [{ start: 3, end: 4, text: 'Kept' }]);
+});
+
 test('blank subtitles yield no usable sentences', () => {
   for (const content of ['', ' \t\r\n\u3000']) {
     assert.equal(scope.parseLRC(content).length, 0);

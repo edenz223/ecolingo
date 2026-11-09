@@ -84,7 +84,7 @@ export class RecordingStore {
     this.db = new SQL.Database(fs.existsSync(this.index) ? fs.readFileSync(this.index) : undefined);
     if (
       fs.existsSync(this.index) &&
-      rows<{ user_version: number }>(this.db, 'PRAGMA user_version')[0].user_version !== 1
+      rows<{ user_version: number }>(this.db, 'PRAGMA user_version')[0]?.user_version !== 1
     ) {
       this.db.close();
       throw new Error('Unsupported recording database version.');
@@ -131,7 +131,8 @@ export class RecordingStore {
       'audio/mp4': 'm4a',
       'audio/wav': 'wav',
     };
-    return path.join(this.root, 'audio', `${clip.id}.${extensions[clip.mime.split(';')[0]]}`);
+    const [type = ''] = clip.mime.split(';');
+    return path.join(this.root, 'audio', `${clip.id}.${extensions[type]}`);
   }
 
   read(id: string): { bytes: Buffer; mime: string } {

@@ -285,8 +285,8 @@ export function createLearningSession(options: LearningSessionOptions = {}) {
 
   // startAt jumps to the sentence beginning at that time once the lesson is ready.
   function playLesson(index: number, continuePlayback = false, startAt?: number) {
-    if (index >= 0 && index < lessons.value.length) {
-      const lesson = lessons.value[index];
+    const lesson = lessons.value[index];
+    if (lesson) {
       currentLessonIndex.value = index;
       loadedLessonKey.value = null;
       player.playLesson(

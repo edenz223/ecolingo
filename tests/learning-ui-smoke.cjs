@@ -29,7 +29,8 @@ runUiSmoke({ prefix: 'ecolingo-ui-' }, async ({ win, temp, evaluate, waitFor, lo
     await waitFor(`Boolean(document.querySelector('.sentence-item'))`);
     await waitFor(`Boolean(document.querySelector('[aria-label="暂停"]'))`);
     await evaluate(`document.querySelector('[aria-label="暂停"]').click()`);
-    assert.match(await evaluate(`document.querySelector('.lesson-progress').textContent`), /002 02.*第.*句/s);
+    // The heading shows the lesson name and a bare "1 / 22" count.
+    assert.match(await evaluate(`document.querySelector('.lesson-progress').textContent`), /002 02.*1 \/ 22/s);
     assert.equal(await evaluate(`document.querySelector('[role="switch"]').getAttribute('aria-checked')`), 'false');
     assert.equal(await evaluate(`Boolean(document.querySelector('.q-toggle'))`), false);
     assert.equal(await evaluate(`(() => { const button = document.querySelector('[aria-label="播放"]'); const rect = button.getBoundingClientRect(); return rect.width === rect.height && getComputedStyle(button).borderRadius === '50%'; })()`), true);
@@ -73,14 +74,16 @@ runUiSmoke({ prefix: 'ecolingo-ui-' }, async ({ win, temp, evaluate, waitFor, lo
     await evaluate(`window.zenTestAudio = new AudioContext();
       navigator.mediaDevices.getUserMedia = async () => window.zenTestAudio.createMediaStreamDestination().stream;
       document.querySelector('[aria-label="播放"]').click()`);
-    await waitFor(`Boolean(document.querySelector('.recording-mic--first'))`);
-    assert.equal(await evaluate(`Boolean(document.querySelector('.first-attempt-label'))`), false);
-    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.recording-mic--first'), '::before').borderTopStyle`), 'dashed');
-    assert.match(await evaluate(`getComputedStyle(document.querySelector('.recording-mic--floating')).backgroundImage`), /linear-gradient/);
-    await waitFor(`Number(getComputedStyle(document.querySelector('.floating-recording')).opacity) > 0.99`);
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    const recordingMicSize = await evaluate(`(() => { const rect = document.querySelector('.recording-mic--floating').getBoundingClientRect(); return { width: rect.width, height: rect.height }; })()`);
-    assert.ok(Math.abs(recordingMicSize.width - 60) < 0.01 && Math.abs(recordingMicSize.height - 60) < 0.01);
+    // "先读再听" opens with the first attempt: with the bar hidden, the floating button shows the waveform.
+    await waitFor(`Boolean(document.querySelector('.focus-recording-btn .recording-waveform'))`);
+    assert.equal(await evaluate(`document.querySelectorAll('.focus-recording-btn .waveform-bar').length`), 3);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('.zen-status .practice-steps li'), li => li.textContent.trim()).join(' · ')`), '尝试 · 听原声 · 跟读 · 回听');
+    assert.equal(await evaluate(`document.querySelector('.zen-status [aria-current="step"]').textContent.trim()`), '尝试');
+    // Flat surfaces only: no gradient on the recording button.
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.focus-recording-btn')).backgroundImage`), 'none');
+    await waitFor(`Number(getComputedStyle(document.querySelector('.focus-recording-btn')).opacity) > 0.99`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.ok(Math.abs(await evaluate(`innerHeight - document.querySelector('.focus-recording-btn').getBoundingClientRect().bottom`) - 16) < 1);
     fs.writeFileSync(path.join(temp, 'zen-first-attempt.png'), (await win.webContents.capturePage()).toPNG());
     win.setSize(640, 800);
     await waitFor(`window.innerWidth < 850`);
@@ -94,9 +97,9 @@ runUiSmoke({ prefix: 'ecolingo-ui-' }, async ({ win, temp, evaluate, waitFor, lo
     await evaluate(`document.querySelector('[aria-label="选择练习方式"]').click()`);
     await waitFor(`Boolean(document.querySelector('.practice-menu'))`);
     await evaluate(`Array.from(document.querySelectorAll('.practice-menu .q-item')).find(el => el.textContent.includes('听读回听')).click()`);
-    await waitFor(`!document.querySelector('.recording-mic--first')`);
+    await waitFor(`!document.querySelector('.focus-recording-btn')`);
     assert.equal(await evaluate(`Boolean(document.querySelector('[aria-label="播放"]'))`), true);
-    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).zenFirstAttempt, false);
+    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).practiceMethod, 'replay');
     await evaluate(`window.zenTestAudio.close()`);
     fs.writeFileSync(path.join(temp, 'zen-ui.png'), (await win.webContents.capturePage()).toPNG());
     await evaluate(`document.querySelector('[aria-label="下一句"]').click()`);
@@ -134,7 +137,7 @@ runUiSmoke({ prefix: 'ecolingo-ui-' }, async ({ win, temp, evaluate, waitFor, lo
     await waitFor(`Boolean(document.querySelector('.lesson-item'))`);
     assert.ok(await evaluate(`document.querySelector('[aria-label="播放速度"]').textContent.includes('1.25')`));
     assert.ok(await evaluate(`Boolean(document.querySelector('[aria-label="循环模式：单句循环4次"]'))`));
-    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).zenFirstAttempt, false);
+    assert.equal(JSON.parse(await evaluate(`localStorage.getItem('ecolingo.settings.v1')`)).practiceMethod, 'replay');
     await evaluate(`document.querySelector('.lesson-item').click()`);
     await waitFor(`Boolean(document.querySelector('.sentence-item'))`);
     await waitFor(`Boolean(document.querySelector('[aria-label="暂停"]'))`);

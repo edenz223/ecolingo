@@ -39,10 +39,7 @@ jobs:
         run: timeout 120 xvfb-run --auto-servernum yarn --cwd src-electron electron ../tests/app-smoke.cjs
       - name: Voice activity smoke test
         run: xvfb-run --auto-servernum yarn --cwd src-electron electron ../tests/voice-activity-smoke.cjs
-      # These still assert the UI from before the redesign; report them without blocking until updated.
       - name: Learning UI smoke test
-        continue-on-error: true
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" bash -c 'fluxbox >/dev/null 2>&1 & sleep 2; yarn --cwd src-electron electron ../tests/learning-ui-smoke.cjs'
       - name: Visual responsiveness smoke test
-        continue-on-error: true
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" bash -c 'fluxbox >/dev/null 2>&1 & sleep 2; yarn --cwd src-electron electron ../tests/visual-responsiveness-smoke.cjs'

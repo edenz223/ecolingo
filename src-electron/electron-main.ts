@@ -13,6 +13,13 @@ import os from 'os';
 import { FileProcessor } from './fileSystem';
 import { RecordingStore, createLessonIdentityCache } from './recording-store';
 
+// Builds before 0.1.0 were named "ecolingo"; keep their recordings where the
+// file system is case-sensitive.
+const legacyUserData = path.join(app.getPath('appData'), 'ecolingo');
+if (!fs.existsSync(app.getPath('userData')) && fs.existsSync(legacyUserData)) {
+  app.setPath('userData', legacyUserData);
+}
+
 const fileProcessor = new FileProcessor();
 const lessonIdentity = createLessonIdentityCache();
 

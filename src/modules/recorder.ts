@@ -301,7 +301,7 @@ export class RecorderManager {
     reason = 'manual',
     context?: {
       sessionId: number;
-      sentence: Sentence;
+      sentence: Sentence | null;
       zenSession?: number;
       zenPhase?: string | null;
     }

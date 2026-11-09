@@ -1,12 +1,13 @@
 {
-  "name": "EcoLingo",
-  "version": "0.0.1",
+  "name": "ecolingo",
+  "version": "0.1.0",
   "description": "A desktop app for language learning with the shadowing method.",
-  "productName": "ecolingo",
+  "productName": "EcoLingo",
   "author": "edenz223",
   "private": true,
   "scripts": {
     "lint": "eslint --ext .js,.ts,.vue ./",
+    "typecheck": "vue-tsc --noEmit",
     "test": "node --test tests/*.test.cjs",
     "test:smoke": "electron tests/voice-activity-smoke.cjs && electron tests/learning-ui-smoke.cjs && electron tests/visual-responsiveness-smoke.cjs",
     "dev": "quasar dev -m electron",
@@ -29,16 +30,18 @@
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
     "electron": "^29.1.5",
-    "electron-packager": "^17.1.1",
+    "electron-builder": "^26.18.1",
     "esbuild": "0.14.51",
     "eslint": "^8.11.0",
     "eslint-config-prettier": "^8.1.0",
     "eslint-plugin-vue": "^9.0.0",
     "prettier": "^2.5.1",
-    "typescript": "~5.7.3"
+    "typescript": "~5.7.3",
+    "vue-tsc": "^2.2.12"
   },
   "engines": {
-    "node": ">=20",
+    "node": ">=22.12",
     "yarn": ">= 1.21.1"
-  }
+  },
+  "packageManager": "yarn@1.22.22"
 }

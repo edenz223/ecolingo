@@ -1,0 +1,47 @@
+1
+00:00:00,150 --> 00:00:01,465
+Emma: Hi, good morning!
+
+2
+00:00:01,465 --> 00:00:04,065
+Jake: Good morning! What can I get for you today?
+
+3
+00:00:04,065 --> 00:00:06,375
+Emma: I'd like a large latte, please.
+
+4
+00:00:06,375 --> 00:00:08,440
+Jake: Sure. Hot or iced?
+
+5
+00:00:08,440 --> 00:00:11,390
+Emma: Hot, please. And could I get oat milk?
+
+6
+00:00:11,390 --> 00:00:13,870
+Jake: Of course. Anything else?
+
+7
+00:00:13,870 --> 00:00:15,790
+Emma: Just a blueberry muffin, please.
+
+8
+00:00:15,790 --> 00:00:19,085
+Jake: That'll be eight dollars fifty. Cash or card?
+
+9
+00:00:19,085 --> 00:00:20,240
+Emma: Card, please.
+
+10
+00:00:20,240 --> 00:00:21,985
+Jake: Go ahead and tap when you're ready.
+
+11
+00:00:21,985 --> 00:00:23,115
+Emma: Thanks so much!
+
+12
+00:00:23,115 --> 00:00:25,130
+Jake: You're welcome. Have a great day!

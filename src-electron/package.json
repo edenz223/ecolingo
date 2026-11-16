@@ -6,11 +6,11 @@
   "type": "module",
   "dependencies": {
     "jschardet": "^4.1.0",
-    "sql.js": "^1.15.2"
+    "sql.js": "^1.16.0"
   },
   "devDependencies": {
     "@types/sql.js": "^1.4.11",
-    "electron": "^45.2.3",
+    "electron": "^45.3.2",
     "electron-builder": "^26.18.0"
   }
 }

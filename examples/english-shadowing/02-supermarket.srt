@@ -1,0 +1,39 @@
+1
+00:00:00,150 --> 00:00:02,890
+Mia: Excuse me, where can I find the bread?
+
+2
+00:00:02,890 --> 00:00:05,210
+Noah: It's in aisle three, on the left.
+
+3
+00:00:05,210 --> 00:00:07,715
+Mia: Thanks. And do you have any fresh strawberries?
+
+4
+00:00:07,715 --> 00:00:10,590
+Noah: Yes, they're right over there, next to the apples.
+
+5
+00:00:10,590 --> 00:00:13,090
+Mia: Perfect. I think that's everything.
+
+6
+00:00:13,090 --> 00:00:14,565
+Noah: Would you like a bag?
+
+7
+00:00:14,565 --> 00:00:16,590
+Mia: Yes, please. Just one.
+
+8
+00:00:16,590 --> 00:00:19,065
+Noah: That comes to twenty-three dollars forty.
+
+9
+00:00:19,065 --> 00:00:20,215
+Mia: Here you go.
+
+10
+00:00:20,215 --> 00:00:21,930
+Noah: Thanks. Have a nice day!

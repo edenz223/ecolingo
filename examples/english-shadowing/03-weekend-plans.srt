@@ -1,0 +1,43 @@
+1
+00:00:00,100 --> 00:00:02,190
+Lily: Hey, what are you doing this weekend?
+
+2
+00:00:02,190 --> 00:00:04,710
+Alex: Not much. Why? What's up?
+
+3
+00:00:04,710 --> 00:00:06,665
+Lily: Do you want to go hiking on Saturday?
+
+4
+00:00:06,665 --> 00:00:08,915
+Alex: That sounds fun! What time?
+
+5
+00:00:08,915 --> 00:00:10,765
+Lily: How about nine in the morning?
+
+6
+00:00:10,765 --> 00:00:12,965
+Alex: Sounds good. Where should we meet?
+
+7
+00:00:12,965 --> 00:00:14,765
+Lily: Let's meet at the park entrance.
+
+8
+00:00:14,765 --> 00:00:17,015
+Alex: Okay. Should I bring anything?
+
+9
+00:00:17,015 --> 00:00:19,215
+Lily: Just bring some water and sunscreen.
+
+10
+00:00:19,215 --> 00:00:21,465
+Alex: Got it. See you on Saturday!
+
+11
+00:00:21,465 --> 00:00:22,380
+Lily: See you then!
